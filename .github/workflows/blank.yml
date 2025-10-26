@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 720
     strategy:
       matrix:
-        build_type: [Release]
+        build_type: [Release, Debug]
 
     steps:
       - name: Checkout MariaDB source
@@ -30,18 +30,25 @@ jobs:
           choco install boost-msvc-14.3 -y
 
       - name: Patch binary_function for MSVC
+        shell: pwsh
         run: |
-          echo "#pragma once" > mariadb/include/my_stl_compat.h
-          echo "#include <functional>" >> mariadb/include/my_stl_compat.h
-          echo "namespace std {" >> mariadb/include/my_stl_compat.h
-          echo "  template <class Arg1, class Arg2, class Result>" >> mariadb/include/my_stl_compat.h
-          echo "  struct binary_function {" >> mariadb/include/my_stl_compat.h
-          echo "    typedef Arg1 first_argument_type;" >> mariadb/include/my_stl_compat.h
-          echo "    typedef Arg2 second_argument_type;" >> mariadb/include/my_stl_compat.h
-          echo "    typedef Result result_type;" >> mariadb/include/my_stl_compat.h
-          echo "  };" >> mariadb/include/my_stl_compat.h
-          echo "}" >> mariadb/include/my_stl_compat.h
-          echo "#include \"my_stl_compat.h\"" | cat - mariadb/storage/innobase/handler/ha_innodb.cc > temp && move /Y temp mariadb/storage/innobase/handler/ha_innodb.cc
+          # 创建兼容头文件
+          Set-Content mariadb/include/my_stl_compat.h '#pragma once'
+          Add-Content mariadb/include/my_stl_compat.h '#include <functional>'
+          Add-Content mariadb/include/my_stl_compat.h 'namespace std {'
+          Add-Content mariadb/include/my_stl_compat.h '  template <class Arg1, class Arg2, class Result>'
+          Add-Content mariadb/include/my_stl_compat.h '  struct binary_function {'
+          Add-Content mariadb/include/my_stl_compat.h '    typedef Arg1 first_argument_type;'
+          Add-Content mariadb/include/my_stl_compat.h '    typedef Arg2 second_argument_type;'
+          Add-Content mariadb/include/my_stl_compat.h '    typedef Result result_type;'
+          Add-Content mariadb/include/my_stl_compat.h '  };'
+          Add-Content mariadb/include/my_stl_compat.h '}'
+
+          # 在 ha_innobase.cc 顶部插入 include
+          $includeLine = '#include "my_stl_compat.h"'
+          $orig = Get-Content mariadb/storage/innobase/handler/ha_innodb.cc
+          $new = $includeLine, $orig
+          Set-Content mariadb/storage/innobase/handler/ha_innodb.cc $new
 
       - name: Configure CMake
         run: |
