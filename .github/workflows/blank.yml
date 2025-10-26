@@ -41,7 +41,7 @@ jobs:
           echo "    typedef Result result_type;" >> mariadb/include/my_stl_compat.h
           echo "  };" >> mariadb/include/my_stl_compat.h
           echo "}" >> mariadb/include/my_stl_compat.h
-          echo "#include \"my_stl_compat.h\"" >> mariadb/storage/innobase/handler/ha_innodb.cc
+          echo "#include \"my_stl_compat.h\"" | cat - mariadb/storage/innobase/handler/ha_innodb.cc > temp && move /Y temp mariadb/storage/innobase/handler/ha_innodb.cc
 
       - name: Configure CMake
         run: |
