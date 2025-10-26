@@ -26,31 +26,71 @@ jobs:
           choco install ninja winflexbison3 -y
           choco install boost-msvc-14.3 -y
 
-      - name: Patch binary_function for MSVC
+      - name: Patch for MSVC compatibility
         shell: pwsh
         run: |
-          # 创建兼容头文件，只在缺失时定义
-          Set-Content mariadb/include/my_stl_compat.h '#pragma once'
-          Add-Content mariadb/include/my_stl_compat.h '#include <functional>'
-          Add-Content mariadb/include/my_stl_compat.h '#ifndef HAS_BINARY_FUNCTION'
-          Add-Content mariadb/include/my_stl_compat.h '#if !defined(_HAS_BINARY_FUNCTION) && !defined(_STL_BINARY_FUNCTION_DEFINED)'
-          Add-Content mariadb/include/my_stl_compat.h 'namespace std {'
-          Add-Content mariadb/include/my_stl_compat.h '  template <class Arg1, class Arg2, class Result>'
-          Add-Content mariadb/include/my_stl_compat.h '  struct binary_function {'
-          Add-Content mariadb/include/my_stl_compat.h '    typedef Arg1 first_argument_type;'
-          Add-Content mariadb/include/my_stl_compat.h '    typedef Arg2 second_argument_type;'
-          Add-Content mariadb/include/my_stl_compat.h '    typedef Result result_type;'
-          Add-Content mariadb/include/my_stl_compat.h '  };'
-          Add-Content mariadb/include/my_stl_compat.h '}'
-          Add-Content mariadb/include/my_stl_compat.h '#define HAS_BINARY_FUNCTION'
-          Add-Content mariadb/include/my_stl_compat.h '#endif'
-          Add-Content mariadb/include/my_stl_compat.h '#endif'
+          # 创建兼容头文件，使用更安全的检查
+          $compatContent = @'
+#pragma once
 
-          # 在 ha_innobase.cc 顶部插入 include
+// 检查是否已经存在 binary_function 的定义
+#if defined(_MSC_VER) && (!defined(_HAS_BINARY_FUNCTION) || _HAS_BINARY_FUNCTION)
+#if !defined(_BINARY_FUNCTION_DEFINED) && !defined(_STL_BINARY_FUNCTION_DEFINED)
+
+#include <functional>
+
+// 只有在确实不存在时才定义
+#ifndef _HAS_BINARY_FUNCTION
+#define _HAS_BINARY_FUNCTION 1
+#endif
+
+#ifndef _BINARY_FUNCTION_DEFINED  
+#define _BINARY_FUNCTION_DEFINED
+
+namespace std {
+  template <class Arg1, class Arg2, class Result>
+  struct binary_function {
+    typedef Arg1 first_argument_type;
+    typedef Arg2 second_argument_type;
+    typedef Result result_type;
+  };
+}
+
+#endif // _BINARY_FUNCTION_DEFINED
+#endif // MSVC check
+#endif // _MSC_VER
+'@
+          Set-Content mariadb/include/my_stl_compat.h $compatContent
+
+          # 在 ha_innodb.cc 顶部插入 include（如果还没有）
           $includeLine = '#include "my_stl_compat.h"'
-          $orig = Get-Content mariadb/storage/innobase/handler/ha_innodb.cc
-          $new = $includeLine, $orig
-          Set-Content mariadb/storage/innobase/handler/ha_innodb.cc $new
+          $filePath = "mariadb/storage/innobase/handler/ha_innodb.cc"
+          $content = Get-Content $filePath
+          
+          # 检查是否已经包含
+          $alreadyIncluded = $content | Where-Object { $_ -eq $includeLine }
+          if (-not $alreadyIncluded) {
+            # 插入到第一个 #include 之后
+            $newContent = @()
+            $foundFirstInclude = $false
+            $inserted = $false
+            
+            foreach ($line in $content) {
+              $newContent += $line
+              if (-not $inserted -and $line -match '^#include\s+' -and -not $foundFirstInclude) {
+                  $foundFirstInclude = $true
+                  $newContent += $includeLine
+                  $inserted = $true
+              }
+            }
+            
+            # 如果没有找到合适的插入位置，插入到文件开头
+            if (-not $inserted) {
+              $newContent = @($includeLine) + $content
+            }
+            
+            Set-Content $filePath $newContent
+          }
 
       - name: Configure CMake
         run: |
