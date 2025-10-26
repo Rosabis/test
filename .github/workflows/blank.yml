@@ -1,4 +1,4 @@
-name: Build MariaDB 10.3.33 (Windows)
+name: Build MariaDB 10.3.33 (Windows Release)
 
 on:
   workflow_dispatch:
@@ -9,9 +9,6 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 720
-    strategy:
-      matrix:
-        build_type: [Release]
 
     steps:
       - name: Checkout MariaDB source
@@ -32,9 +29,11 @@ jobs:
       - name: Patch binary_function for MSVC
         shell: pwsh
         run: |
-          # 创建兼容头文件
+          # 创建兼容头文件，只在缺失时定义
           Set-Content mariadb/include/my_stl_compat.h '#pragma once'
           Add-Content mariadb/include/my_stl_compat.h '#include <functional>'
+          Add-Content mariadb/include/my_stl_compat.h '#ifndef HAS_BINARY_FUNCTION'
+          Add-Content mariadb/include/my_stl_compat.h '#if !defined(_HAS_BINARY_FUNCTION) && !defined(_STL_BINARY_FUNCTION_DEFINED)'
           Add-Content mariadb/include/my_stl_compat.h 'namespace std {'
           Add-Content mariadb/include/my_stl_compat.h '  template <class Arg1, class Arg2, class Result>'
           Add-Content mariadb/include/my_stl_compat.h '  struct binary_function {'
@@ -43,6 +42,9 @@ jobs:
           Add-Content mariadb/include/my_stl_compat.h '    typedef Result result_type;'
           Add-Content mariadb/include/my_stl_compat.h '  };'
           Add-Content mariadb/include/my_stl_compat.h '}'
+          Add-Content mariadb/include/my_stl_compat.h '#define HAS_BINARY_FUNCTION'
+          Add-Content mariadb/include/my_stl_compat.h '#endif'
+          Add-Content mariadb/include/my_stl_compat.h '#endif'
 
           # 在 ha_innobase.cc 顶部插入 include
           $includeLine = '#include "my_stl_compat.h"'
@@ -53,12 +55,12 @@ jobs:
       - name: Configure CMake
         run: |
           cd mariadb
-          cmake -G "Ninja" . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DWITH_SSL=bundled -DWITH_ZLIB=bundled -DWITHOUT_TOKUDB=1 -DWITHOUT_ROCKSDB=1 -DWITHOUT_OQGRAPH=1 -DWITH_UNIT_TESTS=0 -DWITH_EMBEDDED_SERVER=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0" -DCMAKE_CXX_STANDARD=14
+          cmake -G "Ninja" . -DCMAKE_BUILD_TYPE=Release -DWITH_SSL=bundled -DWITH_ZLIB=bundled -DWITHOUT_TOKUDB=1 -DWITHOUT_ROCKSDB=1 -DWITHOUT_OQGRAPH=1 -DWITH_UNIT_TESTS=0 -DWITH_EMBEDDED_SERVER=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0" -DCMAKE_CXX_STANDARD=14
 
       - name: Build
         run: |
           cd mariadb
-          cmake --build . --config ${{ matrix.build_type }}
+          cmake --build . --config Release
 
       - name: Install
         run: |
@@ -68,5 +70,5 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mariadb-windows-10.3.33-${{ matrix.build_type }}
+          name: mariadb-windows-10.3.33-Release
           path: mariadb/install
