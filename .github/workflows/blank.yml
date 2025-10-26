@@ -1,7 +1,7 @@
 name: Build MariaDB 10.3.33 (Windows)
 
 on:
-  workflow_dispatch:   # 手动触发
+  workflow_dispatch:
   push:
     branches: [ main ]
 
@@ -10,50 +10,35 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # 1. 检出源码
       - name: Checkout MariaDB source
         run: |
           git clone --branch mariadb-10.3.33 --depth 1 https://github.com/MariaDB/server.git mariadb
           cd mariadb
           git submodule update --init --recursive
 
-      # 2. 安装依赖 (MSVC, CMake, Boost)
       - name: Setup MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install dependencies
         run: |
-          choco install cmake ninja -y
-          choco install winflexbison3 -y
-          # Boost 1.59+ required
+          choco install cmake ninja winflexbison3 -y
           choco install boost-msvc-14.3 -y
 
-      # 3. 配置 CMake
       - name: Configure CMake
         run: |
           cd mariadb
-          cmake -G "Ninja" ^
-            -DCMAKE_BUILD_TYPE=Release ^
-            -DWITH_SSL=system ^
-            -DWITH_ZLIB=system ^
-            -DWITHOUT_TOKUDB=1 ^
-            -DWITH_UNIT_TESTS=0 ^
-            -DCMAKE_INSTALL_PREFIX=install ^
-            -DBOOST_ROOT="C:/local/boost_1_81_0"
+          cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DWITH_SSL=system -DWITH_ZLIB=system -DWITHOUT_TOKUDB=1 -DWITH_UNIT_TESTS=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0"
 
-      # 4. 编译
       - name: Build
         run: |
           cd mariadb
           cmake --build . --config Release
 
-      # 5. 安装到临时目录
       - name: Install
         run: |
           cd mariadb
           cmake --install . --prefix install
 
-      # 6. 上传 artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
