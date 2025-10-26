@@ -28,7 +28,7 @@ jobs:
       - name: Configure CMake
         run: |
           cd mariadb
-          cmake -G "Ninja" . -DCMAKE_BUILD_TYPE=Release -DWITH_SSL=system -DWITH_ZLIB=system -DWITHOUT_TOKUDB=1 -DWITH_UNIT_TESTS=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0"
+          cmake -G "Ninja" . -DCMAKE_BUILD_TYPE=Release -DWITH_SSL=bundled -DWITH_ZLIB=bundled -DWITHOUT_TOKUDB=1 -DWITH_UNIT_TESTS=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0"
 
       - name: Build
         run: |
