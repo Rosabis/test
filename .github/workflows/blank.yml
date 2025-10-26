@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        build_type: [Release, Debug]
 
     steps:
       - name: Checkout MariaDB source
@@ -28,12 +31,12 @@ jobs:
       - name: Configure CMake
         run: |
           cd mariadb
-          cmake -G "Ninja" . -DCMAKE_BUILD_TYPE=Release -DWITH_SSL=bundled -DWITH_ZLIB=bundled -DWITHOUT_TOKUDB=1 -DWITH_UNIT_TESTS=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0"
+          cmake -G "Ninja" . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DWITH_SSL=bundled -DWITH_ZLIB=bundled -DWITHOUT_TOKUDB=1 -DWITH_UNIT_TESTS=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0" -DCMAKE_CXX_STANDARD=14
 
       - name: Build
         run: |
           cd mariadb
-          cmake --build . --config Release
+          cmake --build . --config ${{ matrix.build_type }}
 
       - name: Install
         run: |
@@ -43,5 +46,5 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mariadb-windows-10.3.33
+          name: mariadb-windows-10.3.33-${{ matrix.build_type }}
           path: mariadb/install
