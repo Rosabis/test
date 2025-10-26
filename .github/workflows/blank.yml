@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 720
     strategy:
       matrix:
         build_type: [Release]
@@ -28,10 +29,24 @@ jobs:
           choco install ninja winflexbison3 -y
           choco install boost-msvc-14.3 -y
 
+      - name: Patch binary_function for MSVC
+        run: |
+          echo "#pragma once" > mariadb/include/my_stl_compat.h
+          echo "#include <functional>" >> mariadb/include/my_stl_compat.h
+          echo "namespace std {" >> mariadb/include/my_stl_compat.h
+          echo "  template <class Arg1, class Arg2, class Result>" >> mariadb/include/my_stl_compat.h
+          echo "  struct binary_function {" >> mariadb/include/my_stl_compat.h
+          echo "    typedef Arg1 first_argument_type;" >> mariadb/include/my_stl_compat.h
+          echo "    typedef Arg2 second_argument_type;" >> mariadb/include/my_stl_compat.h
+          echo "    typedef Result result_type;" >> mariadb/include/my_stl_compat.h
+          echo "  };" >> mariadb/include/my_stl_compat.h
+          echo "}" >> mariadb/include/my_stl_compat.h
+          echo "#include \"my_stl_compat.h\"" >> mariadb/storage/innobase/handler/ha_innodb.cc
+
       - name: Configure CMake
         run: |
           cd mariadb
-          cmake -G "Ninja" . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DWITH_SSL=bundled -DWITH_ZLIB=bundled -DWITHOUT_TOKUDB=1 -DWITH_UNIT_TESTS=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0" -DCMAKE_CXX_STANDARD=14
+          cmake -G "Ninja" . -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DWITH_SSL=bundled -DWITH_ZLIB=bundled -DWITHOUT_TOKUDB=1 -DWITHOUT_ROCKSDB=1 -DWITHOUT_OQGRAPH=1 -DWITH_UNIT_TESTS=0 -DWITH_EMBEDDED_SERVER=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0" -DCMAKE_CXX_STANDARD=14
 
       - name: Build
         run: |
