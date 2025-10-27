@@ -1,7 +1,7 @@
-name: DS MariaDB 10.3.33 Windows x86
+name: ds
 
 on:
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
   push:
     branches: [ main, master ]
   pull_request:
@@ -13,46 +13,51 @@ env:
 jobs:
   build-windows-x86:
     name: Build MariaDB ${{ env.MARIADB_VERSION }} for Windows x86
-    runs-on: windows-latest # 使用Windows构建环境[citation:7]
+    runs-on: windows-latest
     strategy:
       matrix:
-        arch: [x86] # 指定x86架构
+        arch: [x86]
 
     steps:
+    # 步骤1: 检出代码
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    # 步骤2: 设置MSBuild环境
     - name: Setup MSBuild Environment
       uses: microsoft/setup-msbuild@v1.1
       with:
-        vs-version: '17.2022' # 确认或调整VS版本
+        vs-version: '17.2022'
 
-    - name: Install necessary dependencies (Example - update as needed)
+    # 步骤3: 安装依赖
+    - name: Install build dependencies
       run: |
-        # 安装MariaDB在Windows上编译可能需要的依赖，例如CMake、特定SDK等。
-        # 例如：choco install cmake -y
-        echo "Install build dependencies for MariaDB here"
+        choco install cmake -y
+        choco install nasm -y
+        choco install bison -y
 
-    - name: Configure MariaDB Build (Adapt this path)
+    # 步骤4: 配置MariaDB编译
+    - name: Configure MariaDB Build
       run: |
-        # 切换到MariaDB源代码目录，运行CMake配置
-        # 例如：cd ${{ github.workspace }}\path\to\mariadb-source
-        # cmake . -G "Visual Studio 17 2022" -A Win32 -DWITH_SSL=... 【根据MariaDB官方指南调整】
-        echo "Configure the MariaDB build using CMake for Win32"
+        mkdir build
+        cd build
+        cmake .. -G "Visual Studio 17 2022" -A Win32 `
+          -DWITH_SSL=system `
+          -DCMAKE_BUILD_TYPE=Release
 
+    # 步骤5: 编译MariaDB
     - name: Compile MariaDB
       run: |
-        # 使用MSBuild进行编译，指定项目文件和平台
-        # 例如：msbuild mariadb.sln /p:Configuration=RelWithDebInfo /p:Platform=Win32
-        echo "Run the actual build command (e.g., msbuild or cmake --build)"
+        cd build
+        msbuild MariaDB.sln /p:Configuration=Release /p:Platform=Win32 /m
 
+    # 步骤6: 上传制品
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: mariadb-${{ env.MARIADB_VERSION }}-windows-${{ matrix.arch }}
         path: |
-          # 指定编译输出的重要文件，例如exe、dll、lib等
-          # 例如：${{ github.workspace }}\path\to\mariadb-source\sql\Debug\mysqld.exe
-          # 例如：${{ github.workspace }}\path\to\built\*.dll
-          your_built_binaries_directory/
-        retention-days: 7 # 可选：设置制品保留天数
+          build/sql/Release/mariadbd.exe
+          build/sql/Release/mysql.exe
+          build/plugin/*/Release/*.dll
+        retention-days: 7
