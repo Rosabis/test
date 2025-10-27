@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2019
+    runs-on: windows-2022   # was windows-2019
 
     steps:
       - name: Checkout source
@@ -30,7 +30,7 @@ jobs:
       - name: Configure CMake
         run: |
           cmake -S . -B build ^
-            -G "Visual Studio 16 2019" ^
+            -G "Visual Studio 17 2022" ^
             -A Win32 ^
             -DWITH_SSL=bundled ^
             -DWITH_ZLIB=bundled ^
@@ -42,16 +42,9 @@ jobs:
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      - name: Package artifacts
-        run: |
-          mkdir package
-          copy build\sql\Release\mysqld.exe package\
-          copy build\libmariadb\Release\libmariadb.dll package\
-          xcopy /E /I include package\include
-          xcopy /E /I lib package\lib
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mariadb-10.3.33-win32
-          path: package
+          path: build/sql/Release/mysqld.exe
+
