@@ -1,25 +1,21 @@
-name: Build MariaDB 10.3.33 (Windows x86)
+name: Gemini
 
-# 允许手动触发此工作流
 on:
   workflow_dispatch:
 
 jobs:
   build-windows-x86:
-    runs-on: windows-latest # 使用最新的 Windows 运行器（通常是 Windows Server 2022）
+    # 保持使用 windows-latest，它现在是 Windows 2022
+    runs-on: windows-latest 
 
     steps:
-      # 1. 检出 MariaDB 10.3.33 的源代码
-      #    我们直接从官方 MariaDB 仓库检出指定的 tag
       - name: Checkout MariaDB 10.3.33
         uses: actions/checkout@v4
         with:
           repository: MariaDB/server
           ref: mariadb-10.3.33
-          submodules: 'recursive' # 非常重要：拉取所有子模块
+          submodules: 'recursive'
 
-      # 2. 安装编译依赖
-      #    MariaDB 在 Windows 上构建需要 Perl 和 Bison
       - name: Install Dependencies (Perl & Bison)
         run: |
           choco install strawberryperl
@@ -27,32 +23,29 @@ jobs:
         shell: pwsh
 
       # 3. 设置 32-bit (x86) 编译环境
-      #    这是最关键的一步。我们需要使用 32-bit 的 Visual Studio 工具链。
-      #    我们使用 `ilammy/msvc-dev-cmd` action 来为后续步骤设置正确的
-      #    PATH, INCLUDE, 和 LIB 环境变量，指向 x86 工具。
-      #    我们选择 VS 2019 (v16)，因为它与 10.3.33 的兼容性最好。
+      #    我们使用 VS 2022，因为它是 windows-latest (Windows 2022) 
+      #    运行器上默认安装的版本。
       - name: Setup MSVC x86 (32-bit) Environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x86
-          vsversion: '2019' # MariaDB 10.3 编译时 VS 2019 是一个安全的选择
+          # 修正：从 '2019' 改为 '2022'
+          vsversion: '2022' 
 
       # 4. 配置 CMake (生成 32-bit 项目)
-      #    我们必须使用 'cmd' shell，因为它能正确继承上一步设置的 MSVC 环境变量。
       - name: Configure CMake
         run: |
           mkdir build
           cd build
-          cmake .. -G "Visual Studio 16 2019" -A Win32 ^
+          
+          # 修正：CMake Generator 从 "Visual Studio 16 2019" 改为 "Visual Studio 17 2022"
+          cmake .. -G "Visual Studio 17 2022" -A Win32 ^
             -DBUILD_CONFIG=mysql_release ^
             -DWITH_SSL=bundled ^
             -DWITH_UNIT_TESTS=OFF
         shell: cmd
 
       # 5. 编译并打包 (Build & Package)
-      #    我们运行 'PACKAGE' 目标，这会自动调用 CPack 来创建一个 .zip 压缩包。
-      #    同样，必须使用 'cmd' shell。
-      #    注意：这一步会非常耗时！
       - name: Build and Package
         run: |
           cd build
@@ -60,10 +53,9 @@ jobs:
         shell: cmd
 
       # 6. 上传构建产物 (Artifact)
-      #    将 build 目录中生成的 .zip 文件上传为 artifact。
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: mariadb-10.3.33-win32-package
-          path: build/mariadb-*.zip # 使用通配符匹配生成的 zip 文件
-          if-no-files-found: error # 如果没有找到 zip 文件，则报错
+          path: build/mariadb-*.zip
+          if-no-files-found: error
