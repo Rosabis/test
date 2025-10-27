@@ -38,11 +38,11 @@ jobs:
           mkdir build
           cd build
           
-          # 修正：CMake Generator 从 "Visual Studio 16 2019" 改为 "Visual Studio 17 2022"
-          cmake .. -G "Visual Studio 17 2022" -A Win32 ^
-            -DBUILD_CONFIG=mysql_release ^
-            -DWITH_SSL=bundled ^
-            -DWITH_UNIT_TESTS=OFF
+          # 修正：将 cmake 命令合并为一行，以避免 'cmd' 和 'pwsh' 之间的 ^ 字符转义问题
+          cmake .. -G "Visual Studio 17 2022" -A Win32 -DBUILD_CONFIG=mysql_release -DWITH_SSL=bundled -DWITH_UNIT_TESTS=OFF
+        
+        # 关键：我们仍然必须使用 'cmd' shell，
+        # 因为上一步 (Setup MSVC) 设置的环境变量是为 'cmd' 准备的。
         shell: cmd
 
       # 5. 编译并打包 (Build & Package)
