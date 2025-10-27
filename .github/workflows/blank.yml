@@ -1,114 +1,69 @@
-name: Build MariaDB 10.3.33 (Windows Release)
+name: Build MariaDB 10.3.33 (Windows x86)
 
+# 允许手动触发此工作流
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
 
 jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 720
+  build-windows-x86:
+    runs-on: windows-latest # 使用最新的 Windows 运行器（通常是 Windows Server 2022）
 
     steps:
-      - name: Checkout MariaDB source
+      # 1. 检出 MariaDB 10.3.33 的源代码
+      #    我们直接从官方 MariaDB 仓库检出指定的 tag
+      - name: Checkout MariaDB 10.3.33
+        uses: actions/checkout@v4
+        with:
+          repository: MariaDB/server
+          ref: mariadb-10.3.33
+          submodules: 'recursive' # 非常重要：拉取所有子模块
+
+      # 2. 安装编译依赖
+      #    MariaDB 在 Windows 上构建需要 Perl 和 Bison
+      - name: Install Dependencies (Perl & Bison)
         run: |
-          git clone --branch mariadb-10.3.33 --depth 1 https://github.com/MariaDB/server.git mariadb
-          cd mariadb
-          git submodule update --init --recursive
-
-      - name: Setup MSVC environment
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install dependencies
-        run: |
-          choco install cmake --version=3.20.0 -y --allow-downgrade
-          choco install ninja winflexbison3 -y
-          choco install boost-msvc-14.3 -y
-
-      - name: Patch for MSVC compatibility
+          choco install strawberryperl
+          choco install winflexbison
         shell: pwsh
-        run: |
-          # 创建兼容头文件，使用更安全的检查
-          $compatContent = @'
-#pragma once
 
-// 检查是否已经存在 binary_function 的定义
-#if defined(_MSC_VER) && (!defined(_HAS_BINARY_FUNCTION) || _HAS_BINARY_FUNCTION)
-#if !defined(_BINARY_FUNCTION_DEFINED) && !defined(_STL_BINARY_FUNCTION_DEFINED)
+      # 3. 设置 32-bit (x86) 编译环境
+      #    这是最关键的一步。我们需要使用 32-bit 的 Visual Studio 工具链。
+      #    我们使用 `ilammy/msvc-dev-cmd` action 来为后续步骤设置正确的
+      #    PATH, INCLUDE, 和 LIB 环境变量，指向 x86 工具。
+      #    我们选择 VS 2019 (v16)，因为它与 10.3.33 的兼容性最好。
+      - name: Setup MSVC x86 (32-bit) Environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+          vsversion: '2019' # MariaDB 10.3 编译时 VS 2019 是一个安全的选择
 
-#include <functional>
-
-// 只有在确实不存在时才定义
-#ifndef _HAS_BINARY_FUNCTION
-#define _HAS_BINARY_FUNCTION 1
-#endif
-
-#ifndef _BINARY_FUNCTION_DEFINED  
-#define _BINARY_FUNCTION_DEFINED
-
-namespace std {
-  template <class Arg1, class Arg2, class Result>
-  struct binary_function {
-    typedef Arg1 first_argument_type;
-    typedef Arg2 second_argument_type;
-    typedef Result result_type;
-  };
-}
-
-#endif // _BINARY_FUNCTION_DEFINED
-#endif // MSVC check
-#endif // _MSC_VER
-'@
-          Set-Content mariadb/include/my_stl_compat.h $compatContent
-
-          # 在 ha_innodb.cc 顶部插入 include（如果还没有）
-          $includeLine = '#include "my_stl_compat.h"'
-          $filePath = "mariadb/storage/innobase/handler/ha_innodb.cc"
-          $content = Get-Content $filePath
-          
-          # 检查是否已经包含
-          $alreadyIncluded = $content | Where-Object { $_ -eq $includeLine }
-          if (-not $alreadyIncluded) {
-            # 插入到第一个 #include 之后
-            $newContent = @()
-            $foundFirstInclude = $false
-            $inserted = $false
-            
-            foreach ($line in $content) {
-              $newContent += $line
-              if (-not $inserted -and $line -match '^#include\s+' -and -not $foundFirstInclude) {
-                  $foundFirstInclude = $true
-                  $newContent += $includeLine
-                  $inserted = $true
-              }
-            }
-            
-            # 如果没有找到合适的插入位置，插入到文件开头
-            if (-not $inserted) {
-              $newContent = @($includeLine) + $content
-            }
-            
-            Set-Content $filePath $newContent
-          }
-
+      # 4. 配置 CMake (生成 32-bit 项目)
+      #    我们必须使用 'cmd' shell，因为它能正确继承上一步设置的 MSVC 环境变量。
       - name: Configure CMake
         run: |
-          cd mariadb
-          cmake -G "Ninja" . -DCMAKE_BUILD_TYPE=Release -DWITH_SSL=bundled -DWITH_ZLIB=bundled -DWITHOUT_TOKUDB=1 -DWITHOUT_ROCKSDB=1 -DWITHOUT_OQGRAPH=1 -DWITH_UNIT_TESTS=0 -DWITH_EMBEDDED_SERVER=0 -DCMAKE_INSTALL_PREFIX=install -DBOOST_ROOT="C:/local/boost_1_81_0" -DCMAKE_CXX_STANDARD=14
+          mkdir build
+          cd build
+          cmake .. -G "Visual Studio 16 2019" -A Win32 ^
+            -DBUILD_CONFIG=mysql_release ^
+            -DWITH_SSL=bundled ^
+            -DWITH_UNIT_TESTS=OFF
+        shell: cmd
 
-      - name: Build
+      # 5. 编译并打包 (Build & Package)
+      #    我们运行 'PACKAGE' 目标，这会自动调用 CPack 来创建一个 .zip 压缩包。
+      #    同样，必须使用 'cmd' shell。
+      #    注意：这一步会非常耗时！
+      - name: Build and Package
         run: |
-          cd mariadb
-          cmake --build . --config Release
+          cd build
+          cmake --build . --config Release --target PACKAGE
+        shell: cmd
 
-      - name: Install
-        run: |
-          cd mariadb
-          cmake --install . --prefix install
-
-      - name: Upload build artifacts
+      # 6. 上传构建产物 (Artifact)
+      #    将 build 目录中生成的 .zip 文件上传为 artifact。
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mariadb-windows-10.3.33-Release
-          path: mariadb/install
+          name: mariadb-10.3.33-win32-package
+          path: build/mariadb-*.zip # 使用通配符匹配生成的 zip 文件
+          if-no-files-found: error # 如果没有找到 zip 文件，则报错
