@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-2022
     strategy:
       matrix:
-        configuration: [Release]
+        configuration: [Release, Debug]
 
     steps:
     - name: Checkout source
@@ -31,7 +31,7 @@ jobs:
       shell: pwsh
       run: |
         $file = "include/my_global.h"
-        $patch = @"
+        $patch = @'
 #if defined(_MSC_VER) && _MSC_VER >= 1900
 #include <functional>
 namespace std {
@@ -43,7 +43,7 @@ namespace std {
   };
 }
 #endif
-"@
+'@
         if (Test-Path $file) {
           $content = Get-Content $file -Raw
           if ($content -notmatch "binary_function") {
@@ -55,15 +55,12 @@ namespace std {
           }
         } else {
           Write-Host "File $file not found."
-        }
 
     - name: Configure CMake
       run: |
         mkdir build
         cd build
-        cmake .. `
-          -G "Ninja" `
-          -A Win32 `
+        cmake .. -G "Ninja" -A Win32 `
           -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} `
           -DCMAKE_INSTALL_PREFIX=install `
           -DWITH_SSL=bundled `
