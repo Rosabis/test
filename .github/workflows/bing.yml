@@ -1,4 +1,4 @@
-name: Build MariaDB 10.3.33 (Windows x86)
+name: Build MariaDB 10.3.33 (Windows x86 Release)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2022   # was windows-2019
+    runs-on: windows-2022
 
     steps:
       - name: Checkout source
@@ -27,9 +27,10 @@ jobs:
           choco install strawberryperl -y
           choco install python -y
 
-      - name: Configure CMake
+      - name: Configure CMake (Release x86)
+        shell: cmd
         run: |
-          cmake -S . -B build ^
+          cmake -S mariadb-10.3.33 -B build ^
             -G "Visual Studio 17 2022" ^
             -A Win32 ^
             -DWITH_SSL=bundled ^
@@ -39,12 +40,21 @@ jobs:
             -DWITHOUT_ROCKSDB=1 ^
             -DWITH_UNIT_TESTS=0
 
-      - name: Build
+      - name: Build (Release)
+        shell: cmd
         run: cmake --build build --config Release --parallel
+
+      - name: Package artifacts
+        shell: cmd
+        run: |
+          mkdir package
+          copy build\sql\Release\mysqld.exe package\
+          copy build\libmariadb\Release\libmariadb.dll package\
+          xcopy /E /I include package\include
+          xcopy /E /I lib package\lib
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mariadb-10.3.33-win32
-          path: build/sql/Release/mysqld.exe
-
+          name: mariadb-10.3.33-win32-release
+          path: package
