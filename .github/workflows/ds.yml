@@ -1,93 +1,57 @@
-name: Build MariaDB 10.3.33 (Win32)
+name: Build MariaDB 10.3.33 (Windows x86)
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: windows-2022
-    strategy:
-      matrix:
-        configuration: [Release, Debug]
+    runs-on: windows-2019
 
     steps:
-    - name: Checkout source
-      uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Install dependencies
-      run: |
-        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
-        choco install ninja -y
-        choco install winflexbison3 -y
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
 
-    - name: Setup MSVC environment
-      uses: ilammy/msvc-dev-cmd@v1
-      with:
-        arch: x86
+      - name: Install dependencies
+        run: |
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+          choco install ninja -y
+          choco install strawberryperl -y
+          choco install python -y
 
-    - name: Patch missing std::binary_function for MSVC
-      shell: pwsh
-      run: |
-        $file = "include/my_global.h"
-        $patch = @'
-#if defined(_MSC_VER) && _MSC_VER >= 1900
-#include <functional>
-namespace std {
-  template <class _Arg1, class _Arg2, class _Result>
-  struct binary_function {
-    typedef _Arg1 first_argument_type;
-    typedef _Arg2 second_argument_type;
-    typedef _Result result_type;
-  };
-}
-#endif
-'@
-        if (Test-Path $file) {
-          $content = Get-Content $file -Raw
-          if ($content -notmatch "binary_function") {
-            $patched = $patch + "`r`n" + $content
-            Set-Content -Path $file -Value $patched -Encoding UTF8
-            Write-Host "Patched $file successfully."
-          } else {
-            Write-Host "Patch already applied."
-          }
-        } else {
-          Write-Host "File $file not found."
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build ^
+            -G "Visual Studio 16 2019" ^
+            -A Win32 ^
+            -DWITH_SSL=bundled ^
+            -DWITH_ZLIB=bundled ^
+            -DWITHOUT_TOKUDB=1 ^
+            -DWITHOUT_MROONGA=1 ^
+            -DWITHOUT_ROCKSDB=1 ^
+            -DWITH_UNIT_TESTS=0
 
-    - name: Configure CMake
-      run: |
-        mkdir build
-        cd build
-        cmake .. -G "Ninja" -A Win32 `
-          -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} `
-          -DCMAKE_INSTALL_PREFIX=install `
-          -DWITH_SSL=bundled `
-          -DWITH_ZLIB=bundled `
-          -DWITH_PIC=OFF `
-          -DWITH_UNIT_TESTS=OFF `
-          -DWITHOUT_DOCS=ON `
-          -DWITHOUT_EXAMPLE=ON `
-          -DWITHOUT_TESTS=ON `
-          -DWITH_WSREP=OFF `
-          -DWITH_INNODB_MEMCACHED=OFF `
-          -DWITH_EMBEDDED_SERVER=OFF `
-          -DWITH_PCRE=bundled `
-          -DCMAKE_C_FLAGS="/DWIN32 /D_WINDOWS /W3 /GR /EHsc /D_CRT_SECURE_NO_WARNINGS" `
-          -DCMAKE_CXX_FLAGS="/DWIN32 /D_WINDOWS /W3 /GR /EHsc /D_CRT_SECURE_NO_WARNINGS /D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS"
+      - name: Build
+        run: cmake --build build --config Release --parallel
 
-    - name: Build
-      run: |
-        cd build
-        cmake --build . --config ${{ matrix.configuration }}
+      - name: Package artifacts
+        run: |
+          mkdir package
+          copy build\sql\Release\mysqld.exe package\
+          copy build\libmariadb\Release\libmariadb.dll package\
+          xcopy /E /I include package\include
+          xcopy /E /I lib package\lib
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: mariadb-${{ matrix.configuration }}-x86
-        path: |
-          build/sql/*.exe
-          build/client/*.exe
-          build/libmysql/*.dll
-          build/libmysql/*.lib
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mariadb-10.3.33-win32
+          path: package
