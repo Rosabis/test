@@ -1,63 +1,96 @@
-name: ds
+name: Build MariaDB 10.3.33 (Win32)
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
-
-env:
-  MARIADB_VERSION: "10.3.33"
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build-windows-x86:
-    name: Build MariaDB ${{ env.MARIADB_VERSION }} for Windows x86
-    runs-on: windows-latest
+  build:
+    runs-on: windows-2022
     strategy:
       matrix:
-        arch: [x86]
+        configuration: [Release]
 
     steps:
-    # 步骤1: 检出代码
-    - name: Checkout repository
+    - name: Checkout source
       uses: actions/checkout@v4
 
-    # 步骤2: 设置MSBuild环境
-    - name: Setup MSBuild Environment
-      uses: microsoft/setup-msbuild@v1.1
-      with:
-        vs-version: '17.2022'
-
-    # 步骤3: 安装依赖
-    - name: Install build dependencies
+    - name: Install dependencies
       run: |
-        choco install cmake -y
-        choco install nasm -y
-        choco install bison -y
+        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+        choco install ninja -y
+        choco install winflexbison3 -y
 
-    # 步骤4: 配置MariaDB编译
-    - name: Configure MariaDB Build
+    - name: Setup MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x86
+
+    - name: Patch missing std::binary_function for MSVC
+      shell: pwsh
+      run: |
+        $file = "include/my_global.h"
+        $patch = @"
+#if defined(_MSC_VER) && _MSC_VER >= 1900
+#include <functional>
+namespace std {
+  template <class _Arg1, class _Arg2, class _Result>
+  struct binary_function {
+    typedef _Arg1 first_argument_type;
+    typedef _Arg2 second_argument_type;
+    typedef _Result result_type;
+  };
+}
+#endif
+"@
+        if (Test-Path $file) {
+          $content = Get-Content $file -Raw
+          if ($content -notmatch "binary_function") {
+            $patched = $patch + "`r`n" + $content
+            Set-Content -Path $file -Value $patched -Encoding UTF8
+            Write-Host "Patched $file successfully."
+          } else {
+            Write-Host "Patch already applied."
+          }
+        } else {
+          Write-Host "File $file not found."
+        }
+
+    - name: Configure CMake
       run: |
         mkdir build
         cd build
-        cmake .. -G "Visual Studio 17 2022" -A Win32 `
-          -DWITH_SSL=system `
-          -DCMAKE_BUILD_TYPE=Release
+        cmake .. `
+          -G "Ninja" `
+          -A Win32 `
+          -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} `
+          -DCMAKE_INSTALL_PREFIX=install `
+          -DWITH_SSL=bundled `
+          -DWITH_ZLIB=bundled `
+          -DWITH_PIC=OFF `
+          -DWITH_UNIT_TESTS=OFF `
+          -DWITHOUT_DOCS=ON `
+          -DWITHOUT_EXAMPLE=ON `
+          -DWITHOUT_TESTS=ON `
+          -DWITH_WSREP=OFF `
+          -DWITH_INNODB_MEMCACHED=OFF `
+          -DWITH_EMBEDDED_SERVER=OFF `
+          -DWITH_PCRE=bundled `
+          -DCMAKE_C_FLAGS="/DWIN32 /D_WINDOWS /W3 /GR /EHsc /D_CRT_SECURE_NO_WARNINGS" `
+          -DCMAKE_CXX_FLAGS="/DWIN32 /D_WINDOWS /W3 /GR /EHsc /D_CRT_SECURE_NO_WARNINGS /D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS"
 
-    # 步骤5: 编译MariaDB
-    - name: Compile MariaDB
+    - name: Build
       run: |
         cd build
-        msbuild MariaDB.sln /p:Configuration=Release /p:Platform=Win32 /m
+        cmake --build . --config ${{ matrix.configuration }}
 
-    # 步骤6: 上传制品
-    - name: Upload Build Artifacts
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: mariadb-${{ env.MARIADB_VERSION }}-windows-${{ matrix.arch }}
+        name: mariadb-${{ matrix.configuration }}-x86
         path: |
-          build/sql/Release/mariadbd.exe
-          build/sql/Release/mysql.exe
-          build/plugin/*/Release/*.dll
-        retention-days: 7
+          build/sql/*.exe
+          build/client/*.exe
+          build/libmysql/*.dll
+          build/libmysql/*.lib
