@@ -81,6 +81,7 @@ namespace KaiosMarketDownloader
             uaList.Add(entry);
             LoadUAList();
             listBox1.SelectedItem = entry;
+            SaveUAList();
         }
 
         private void buttonSave_Click(object sender, EventArgs e)
@@ -110,6 +111,7 @@ namespace KaiosMarketDownloader
             SelectedUAEntry.UA = ua;
             LoadUAList();
             listBox1.SelectedItem = SelectedUAEntry;
+            SaveUAList();
         }
 
         private void buttonDelete_Click(object sender, EventArgs e)
@@ -125,6 +127,7 @@ namespace KaiosMarketDownloader
                     {
                         listBox1.SelectedIndex = 0;
                     }
+                    SaveUAList();
                 }
             }
             else

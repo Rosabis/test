@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿namespace KaiosMarketDownloader
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿namespace KaiosMarketDownloader
 {
     partial class Form1
     {
@@ -73,7 +73,7 @@
             this.checkBox1.AutoSize = true;
             this.checkBox1.Checked = true;
             this.checkBox1.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.checkBox1.Location = new System.Drawing.Point(95, 428);
+            this.checkBox1.Location = new System.Drawing.Point(12, 428);
             this.checkBox1.Name = "checkBox1";
             this.checkBox1.Size = new System.Drawing.Size(72, 16);
             this.checkBox1.TabIndex = 2;
@@ -131,7 +131,7 @@
             // buttonSaveSettings
             // 
             this.buttonSaveSettings.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.buttonSaveSettings.Location = new System.Drawing.Point(175, 428);
+            this.buttonSaveSettings.Location = new System.Drawing.Point(92, 428);
             this.buttonSaveSettings.Name = "buttonSaveSettings";
             this.buttonSaveSettings.Size = new System.Drawing.Size(70, 24);
             this.buttonSaveSettings.TabIndex = 14;
@@ -144,7 +144,7 @@
             this.comboBoxUA.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.comboBoxUA.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.comboBoxUA.FormattingEnabled = true;
-            this.comboBoxUA.Location = new System.Drawing.Point(320, 428);
+            this.comboBoxUA.Location = new System.Drawing.Point(237, 428);
             this.comboBoxUA.Name = "comboBoxUA";
             this.comboBoxUA.Size = new System.Drawing.Size(200, 20);
             this.comboBoxUA.TabIndex = 10;
@@ -153,7 +153,7 @@
             // 
             this.labelUA.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.labelUA.AutoSize = true;
-            this.labelUA.Location = new System.Drawing.Point(255, 432);
+            this.labelUA.Location = new System.Drawing.Point(172, 432);
             this.labelUA.Name = "labelUA";
             this.labelUA.Size = new System.Drawing.Size(65, 12);
             this.labelUA.TabIndex = 11;
@@ -181,7 +181,7 @@
             // button3
             // 
             this.button3.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-            this.button3.Location = new System.Drawing.Point(530, 428);
+            this.button3.Location = new System.Drawing.Point(447, 428);
             this.button3.Name = "button3";
             this.button3.Size = new System.Drawing.Size(92, 24);
             this.button3.TabIndex = 8;

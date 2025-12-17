@@ -656,18 +656,30 @@ namespace KaiosMarketDownloader
         private void button3_Click(object sender, EventArgs e)
         {
             var editor = new UAEditorForm(uaList, uaList.FirstOrDefault(x => x.Remark == selectedUARemark));
-            if (editor.ShowDialog() == DialogResult.OK)
+            editor.ShowDialog();
+            
+            // 无论是否点击确定，都重新加载/刷新列表，因为在编辑器中可能已经保存了修改
+            // 重新从 INI 读取以确保同步，或者直接信任内存中的 uaList (它是引用传递)
+            // 为了保险，如果编辑器中进行了保存操作，内存中的 uaList 已经更新了
+            // 但为了防止多开或其他情况，这里可以选择重新读取，但考虑到是单用户操作，直接刷新 ComboBox 即可
+            
+            UpdateUAComboBox();
+            
+            // 尝试保持之前的选择
+            if (!string.IsNullOrEmpty(selectedUARemark))
             {
-                uaList = editor.UAList;
-                UAEditorForm.SaveUAListToIni(uaList);
-                UpdateUAComboBox();
-                
-                // 保存选中的 UA
-                if (comboBoxUA?.SelectedItem is UAEntry selected)
+                var selected = uaList.FirstOrDefault(x => x.Remark == selectedUARemark);
+                if (selected != null)
                 {
-                    selectedUARemark = selected.Remark;
-                    OperateIniFile.WriteIniString("setting", "SelectedUARemark", selectedUARemark);
+                    comboBoxUA.SelectedItem = selected;
                 }
+            }
+
+            // 保存选中的 UA
+            if (comboBoxUA?.SelectedItem is UAEntry currentSelected)
+            {
+                selectedUARemark = currentSelected.Remark;
+                OperateIniFile.WriteIniString("setting", "SelectedUARemark", selectedUARemark);
             }
         }
 
