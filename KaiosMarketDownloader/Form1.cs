@@ -57,9 +57,9 @@ namespace KaiosMarketDownloader
             if (comboBoxUA != null)
             {
                 comboBoxUA.DataSource = null;
+                comboBoxUA.DataSource = uaList;
                 comboBoxUA.DisplayMember = "Remark";
                 comboBoxUA.ValueMember = "UA";
-                comboBoxUA.DataSource = uaList;
                 
                 if (!string.IsNullOrEmpty(selectedUARemark))
                 {

@@ -32,10 +32,10 @@ namespace KaiosMarketDownloader
 
         private void LoadUAList()
         {
-            listBox1.DisplayMember = "Remark";
-            listBox1.ValueMember = "UA";
             listBox1.DataSource = null;
             listBox1.DataSource = uaList;
+            listBox1.DisplayMember = "Remark";
+            listBox1.ValueMember = "UA";
             UpdateEditFields();
         }
 
@@ -147,8 +147,7 @@ namespace KaiosMarketDownloader
         {
             try
             {
-                var json = JsonConvert.SerializeObject(uaList);
-                OperateIniFile.WriteIniString("UA", "List", json);
+                SaveUAListToIni(uaList);
             }
             catch (Exception ex)
             {
@@ -160,9 +159,24 @@ namespace KaiosMarketDownloader
         {
             try
             {
-                var json = OperateIniFile.ReadIniString("UA", "List", "[]");
-                var list = JsonConvert.DeserializeObject<List<UAEntry>>(json);
-                return list ?? new List<UAEntry>();
+                // 首先尝试从 ualist.json 读取（新方式）
+                var jsonPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ualist.json");
+                if (System.IO.File.Exists(jsonPath))
+                {
+                    var json = System.IO.File.ReadAllText(jsonPath);
+                    var list = JsonConvert.DeserializeObject<List<UAEntry>>(json);
+                    return list ?? new List<UAEntry>();
+                }
+                
+                // 如果不存在，尝试从旧的 ini 读取并迁移
+                var jsonIni = OperateIniFile.ReadIniString("UA", "List", "[]");
+                var listIni = JsonConvert.DeserializeObject<List<UAEntry>>(jsonIni);
+                if (listIni != null && listIni.Count > 0)
+                {
+                    return listIni;
+                }
+                
+                return new List<UAEntry>();
             }
             catch
             {
@@ -174,8 +188,10 @@ namespace KaiosMarketDownloader
         {
             try
             {
-                var json = JsonConvert.SerializeObject(list);
-                OperateIniFile.WriteIniString("UA", "List", json);
+                // 使用 ualist.json 保存，避免 INI 长度限制
+                var json = JsonConvert.SerializeObject(list, Formatting.Indented);
+                var jsonPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ualist.json");
+                System.IO.File.WriteAllText(jsonPath, json);
             }
             catch
             {

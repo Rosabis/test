@@ -40,6 +40,11 @@ namespace KaiosMarketDownloader.Beans
                 PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
             }
         }
+
+        public override string ToString()
+        {
+            return Remark;
+        }
     }
 }
 
