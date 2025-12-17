@@ -1,0 +1,59 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: 检查项目文件的目标框架版本
+      shell: pwsh
+      run: |
+        Write-Host "检查项目文件的目标框架版本..."
+        $content = Get-Content "KaiosMarketDownloader\KaiosMarketDownloader.csproj" -Raw
+        if ($content -match 'TargetFrameworkVersion>v(\d+\.\d+)<') {
+          $version = $matches[1]
+          Write-Host "目标框架版本: v$version"
+          if ($version -ne "4.8") {
+            Write-Host "错误: 项目文件的目标框架不是 v4.8，而是 v$version"
+            exit 1
+          }
+        } else {
+          Write-Host "警告: 未找到 TargetFrameworkVersion"
+        }
+    
+    - name: 设置 MSBuild
+      uses: microsoft/setup-msbuild@v1
+    
+    - name: 还原 NuGet 包
+      shell: pwsh
+      run: |
+        nuget restore KaiosMarketDownloader.sln
+    
+    - name: 构建项目
+      shell: pwsh
+      run: |
+        msbuild KaiosMarketDownloader.sln /p:Configuration=Release /p:Platform="Any CPU" /t:Build /v:minimal
+    
+    - name: 复制构建产物
+      shell: pwsh
+      run: |
+        if (-not (Test-Path "artifacts")) {
+          New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
+        }
+        if (Test-Path "KaiosMarketDownloader\bin\Release") {
+          Copy-Item -Path "KaiosMarketDownloader\bin\Release\*" -Destination "artifacts\" -Recurse -Force
+        }
+    
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: artifacts/
