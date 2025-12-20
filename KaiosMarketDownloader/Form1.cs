@@ -42,8 +42,8 @@ namespace KaiosMarketDownloader
             // 如果 UA 列表为空，添加默认的 V2 和 V3 UA
             if (uaList.Count == 0)
             {
-                uaList.Add(new UAEntry { Remark = "KaiOS V3 (默认)", UA = KaiSton.V3Str });
-                uaList.Add(new UAEntry { Remark = "KaiOS V2 (默认)", UA = KaiSton.V2Str });
+                uaList.Add(new UAEntry { Remark = "KaiOS V3 (默认)", UA = KaiSton.V3Str, Order = 0 });
+                uaList.Add(new UAEntry { Remark = "KaiOS V2 (默认)", UA = KaiSton.V2Str, Order = 1 });
                 UAEditorForm.SaveUAListToIni(uaList);
             }
             

@@ -32,6 +32,20 @@ namespace KaiosMarketDownloader.Beans
             }
         }
 
+        private int _order = 0;
+        public int Order
+        {
+            get { return _order; }
+            set
+            {
+                if (_order != value)
+                {
+                    _order = value;
+                    OnPropertyChanged("Order");
+                }
+            }
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged(string propertyName)
         {
