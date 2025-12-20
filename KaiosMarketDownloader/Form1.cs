@@ -104,7 +104,7 @@ namespace KaiosMarketDownloader
             {
                 token = token.Replace(c.ToString(), "_");
             }
-            return token;
+            return token.ToLower();
         }
         private void button1_Click(object sender, EventArgs e)
         {
