@@ -352,7 +352,7 @@ namespace KaiosMarketDownloader
                 string downloadpath = Directory.GetCurrentDirectory() + "\\eggs\\";
                 if (CustomUA)
                 {
-                    var suffix = MakeSafeFolderToken(KaiSton.model);
+                    var suffix = MakeSafeFolderToken(selectedUARemark);
                     downloadpath = Directory.GetCurrentDirectory() + "\\eggs_" + suffix + "\\";
                 }
                 else
@@ -557,7 +557,7 @@ namespace KaiosMarketDownloader
                             string oldpath = Directory.GetCurrentDirectory() + "\\eggs_old\\";
                             if (CustomUA)
                             {
-                                var suffix = MakeSafeFolderToken(KaiSton.model);
+                                var suffix = MakeSafeFolderToken(selectedUARemark);
                                 downloadpath = Directory.GetCurrentDirectory() + "\\eggs_" + suffix + "\\";
                                 oldpath = Directory.GetCurrentDirectory() + "\\eggs_" + suffix + "_old\\";
                             }
