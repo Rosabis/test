@@ -222,9 +222,37 @@ namespace KaiosMarketDownloader
             e.Effect = DragDropEffects.Move;
             Point point = listBox1.PointToClient(new Point(e.X, e.Y));
             int index = listBox1.IndexFromPoint(point);
-            if (index >= 0 && index != dragIndex)
+            
+            if (index >= 0)
             {
-                listBox1.SelectedIndex = index;
+                // 检查鼠标是在项目的上半部分还是下半部分
+                Rectangle itemRect = listBox1.GetItemRectangle(index);
+                if (point.Y > itemRect.Top + itemRect.Height / 2)
+                {
+                    // 鼠标在项目下半部分，插入到下一个位置
+                    index++;
+                }
+                
+                if (index != dragIndex && index >= 0 && index <= listBox1.Items.Count)
+                {
+                    // 高亮显示目标位置（通过选中）
+                    if (index < listBox1.Items.Count)
+                    {
+                        listBox1.SelectedIndex = index;
+                    }
+                    else
+                    {
+                        listBox1.SelectedIndex = listBox1.Items.Count - 1;
+                    }
+                }
+            }
+            else
+            {
+                // 如果不在任何项目上，检查是否在列表底部
+                if (point.Y > listBox1.GetItemRectangle(listBox1.Items.Count - 1).Bottom)
+                {
+                    listBox1.SelectedIndex = listBox1.Items.Count - 1;
+                }
             }
         }
 
@@ -234,14 +262,66 @@ namespace KaiosMarketDownloader
 
             Point point = listBox1.PointToClient(new Point(e.X, e.Y));
             int targetIndex = listBox1.IndexFromPoint(point);
-            if (targetIndex < 0) targetIndex = listBox1.Items.Count - 1;
+            
+            // 如果找不到目标位置，检查是否在列表底部
+            if (targetIndex < 0)
+            {
+                if (listBox1.Items.Count > 0)
+                {
+                    Rectangle lastRect = listBox1.GetItemRectangle(listBox1.Items.Count - 1);
+                    if (point.Y > lastRect.Bottom)
+                    {
+                        targetIndex = listBox1.Items.Count;
+                    }
+                    else
+                    {
+                        targetIndex = listBox1.Items.Count - 1;
+                    }
+                }
+                else
+                {
+                    targetIndex = 0;
+                }
+            }
+            else
+            {
+                // 检查鼠标是在项目的上半部分还是下半部分
+                Rectangle itemRect = listBox1.GetItemRectangle(targetIndex);
+                if (point.Y > itemRect.Top + itemRect.Height / 2)
+                {
+                    // 鼠标在项目下半部分，插入到下一个位置
+                    targetIndex++;
+                }
+            }
+            
+            // 确保 targetIndex 在有效范围内
+            if (targetIndex > listBox1.Items.Count)
+            {
+                targetIndex = listBox1.Items.Count;
+            }
+            if (targetIndex < 0)
+            {
+                targetIndex = 0;
+            }
 
-            if (dragIndex != targetIndex && dragIndex < uaList.Count && targetIndex < uaList.Count)
+            // 只有当目标位置与源位置不同时才执行移动
+            if (dragIndex != targetIndex && dragIndex >= 0 && dragIndex < uaList.Count && targetIndex >= 0 && targetIndex <= uaList.Count)
             {
                 var draggedItem = uaList[dragIndex];
                 uaList.RemoveAt(dragIndex);
-                if (targetIndex > dragIndex) targetIndex--;
-                uaList.Insert(targetIndex, draggedItem);
+                
+                // 如果目标位置在源位置之后，移除项目后索引会前移，需要调整
+                int insertIndex = targetIndex;
+                if (targetIndex > dragIndex)
+                {
+                    insertIndex = targetIndex - 1;
+                }
+                
+                // 确保 insertIndex 在有效范围内
+                if (insertIndex < 0) insertIndex = 0;
+                if (insertIndex > uaList.Count) insertIndex = uaList.Count;
+                
+                uaList.Insert(insertIndex, draggedItem);
                 
                 // 更新所有 Order（基于新的列表顺序）
                 for (int i = 0; i < uaList.Count; i++)
@@ -250,7 +330,7 @@ namespace KaiosMarketDownloader
                 }
                 
                 LoadUAList();
-                listBox1.SelectedIndex = targetIndex;
+                listBox1.SelectedIndex = insertIndex;
                 SaveUAList();
             }
 
