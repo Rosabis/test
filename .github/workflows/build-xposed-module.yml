@@ -62,8 +62,10 @@ jobs:
           echo "✅ APK构建成功"
           ls -lh "$APK_PATH"
         else
-          echo "❌ APK文件不存在"
-          find "Xposed模块获取QToken信息" -name "*.apk" -type f
+          echo "❌ APK文件不存在，查找所有APK文件..."
+          find "Xposed模块获取QToken信息" -name "*.apk" -type f || true
+          echo "检查构建输出目录..."
+          ls -la "Xposed模块获取QToken信息/app/build/outputs/" || true
           exit 1
         fi
         
