@@ -1,9 +1,2 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-
-# Keep Xposed classes
--keep class de.robv.android.xposed.** { *; }
-
-# Keep our hook class
--keep class com.example.qtokenhook.** { *; }
+# 此文件已移动到 app/proguard-rules.pro
+# 保留此文件以避免构建错误

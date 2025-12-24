@@ -33,12 +33,12 @@ jobs:
         if [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
           echo "Creating Gradle wrapper..."
           mkdir -p gradle/wrapper
-          # 下载gradle-wrapper.jar
-          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v7.0.2/gradle/wrapper/gradle-wrapper.jar || {
+          # 下载gradle-wrapper.jar (Gradle 7.5支持Java 17)
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v7.5.0/gradle/wrapper/gradle-wrapper.jar || {
             echo "Failed to download wrapper jar, trying alternative method..."
             # 如果下载失败，尝试使用系统gradle
             if command -v gradle &> /dev/null; then
-              gradle wrapper --gradle-version 7.0.2
+              gradle wrapper --gradle-version 7.5
             else
               echo "Error: Cannot create gradle wrapper"
               exit 1
