@@ -7,4 +7,3 @@
 
 # Keep our hook class
 -keep class com.example.qtokenhook.** { *; }
-
