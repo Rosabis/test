@@ -68,7 +68,7 @@ jobs:
         fi
         
     - name: Upload APK artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: qtokenhook-module-apk
         path: Xposed模块获取QToken信息/app/build/outputs/apk/debug/*.apk
