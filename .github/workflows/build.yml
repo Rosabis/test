@@ -1,59 +1,61 @@
-name: Build
+name: Build and Release
 
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
     
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: 检查项目文件的目标框架版本
-      shell: pwsh
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v1.1
+      
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1
+      
+    - name: Restore NuGet packages
+      run: nuget restore KaiosMarketDownloader.csproj -PackagesDirectory packages -NonInteractive
+      
+    - name: Build Release
       run: |
-        Write-Host "检查项目文件的目标框架版本..."
-        $content = Get-Content "KaiosMarketDownloader\KaiosMarketDownloader.csproj" -Raw
-        if ($content -match 'TargetFrameworkVersion>v(\d+\.\d+)<') {
-          $version = $matches[1]
-          Write-Host "目标框架版本: v$version"
-          if ($version -ne "4.8") {
-            Write-Host "错误: 项目文件的目标框架不是 v4.8，而是 v$version"
-            exit 1
-          }
-        } else {
-          Write-Host "警告: 未找到 TargetFrameworkVersion"
-        }
-    
-    - name: 设置 MSBuild
-      uses: microsoft/setup-msbuild@v1
-    
-    - name: 还原 NuGet 包
-      shell: pwsh
+        msbuild KaiosMarketDownloader.csproj /p:Configuration=Release /p:Platform=AnyCPU /p:OutputPath=bin\Release\ /t:Build /v:minimal /p:RestorePackages=false
+      
+    - name: Build Debug
       run: |
-        nuget restore KaiosMarketDownloader.sln
-    
-    - name: 构建项目
-      shell: pwsh
+        msbuild KaiosMarketDownloader.csproj /p:Configuration=Debug /p:Platform=AnyCPU /p:OutputPath=bin\Debug\ /t:Build /v:minimal /p:RestorePackages=false
+      
+    - name: Copy DLLs to Release output
       run: |
-        msbuild KaiosMarketDownloader.sln /p:Configuration=Release /p:Platform="Any CPU" /t:Build /v:minimal
-    
-    - name: 复制构建产物
-      shell: pwsh
+        if not exist "bin\Release" mkdir "bin\Release"
+        copy /Y "dlls\*.dll" "bin\Release\"
+      
+    - name: Copy DLLs to Debug output
       run: |
-        if (-not (Test-Path "artifacts")) {
-          New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
-        }
-        if (Test-Path "KaiosMarketDownloader\bin\Release") {
-          Copy-Item -Path "KaiosMarketDownloader\bin\Release\*" -Destination "artifacts\" -Recurse -Force
-        }
-    
-    - name: 上传构建产物
+        if not exist "bin\Debug" mkdir "bin\Debug"
+        copy /Y "dlls\*.dll" "bin\Debug\"
+      
+    - name: Upload Release artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: build-artifacts
-        path: artifacts/
+        name: KaiosMarketDownloader-Release
+        path: |
+          bin/Release/*
+          !bin/Release/*.pdb
+        retention-days: 30
+      
+    - name: Upload Debug artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: KaiosMarketDownloader-Debug
+        path: |
+          bin/Debug/*
+        retention-days: 30
+
