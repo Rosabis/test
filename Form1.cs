@@ -10,7 +10,6 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
-using System.Runtime.Remoting.Messaging;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -73,6 +72,7 @@ namespace KaiosMarketDownloader
         }
         private bool V3 = true;
         Thread thread = null;
+        private CancellationTokenSource? cancellationTokenSource = null;
         private bool CustomUA = true;
         private List<UAEntry> uaList = new List<UAEntry>();
         private string selectedUARemark = string.Empty;
@@ -162,7 +162,8 @@ namespace KaiosMarketDownloader
             if (button1.Text == "开始下崽")
             {
                 button1.Enabled = false;
-                thread = new Thread(DownloadThread);
+                cancellationTokenSource = new CancellationTokenSource();
+                thread = new Thread(() => DownloadThread(cancellationTokenSource.Token));
                 thread.IsBackground = true;
                 thread.Start();
                 button1.Text = "停止下崽";
@@ -173,23 +174,27 @@ namespace KaiosMarketDownloader
                 button1.Enabled = false;
                 try
                 {
-                    if (thread != null)
+                    if (cancellationTokenSource != null)
                     {
-
-                        thread.Abort();
+                        cancellationTokenSource.Cancel();
                     }
                 }
                 catch (Exception ex)
                 {
 
                 }
+                // 等待线程结束
+                if (thread != null && thread.IsAlive)
+                {
+                    thread.Join(1000); // 等待最多1秒
+                }
                 foreach (Thread t in threadlist)
                 {
                     try
                     {
-                        if (t != null)
+                        if (t != null && t.IsAlive)
                         {
-                            t.Abort();
+                            t.Join(500); // 等待每个线程最多500ms
                         }
                     }
                     catch (Exception ex)
@@ -198,6 +203,8 @@ namespace KaiosMarketDownloader
                     }
                 }
                 threadlist.Clear();
+                cancellationTokenSource?.Dispose();
+                cancellationTokenSource = null;
                 button1.Text = "开始下崽";
                 button1.Enabled = true;
             }
@@ -230,9 +237,9 @@ namespace KaiosMarketDownloader
             }));
         }
         private object locker = new object();
-        private void DownThread()
+        private void DownThread(CancellationToken cancellationToken)
         {
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
                 try
                 {
@@ -267,6 +274,10 @@ namespace KaiosMarketDownloader
 
                     for (int trycount = 1; trycount <= 5; trycount++)
                     {
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            return;
+                        }
                         try
                         {
                             Log("第" + Thread.CurrentThread.Name + "只母鸡，正在努力下第" + (i + 1) + "只崽,崽的名字叫：" + rename + "！");
@@ -325,7 +336,7 @@ namespace KaiosMarketDownloader
         Queue<KaiosStoneItem> downlist = new Queue<KaiosStoneItem>();
         List<Thread> threadlist = new List<Thread>();
         bool ZengLiang = false;
-        private void DownloadThread()
+        private void DownloadThread(CancellationToken cancellationToken)
         {
             try
             {
@@ -377,6 +388,10 @@ namespace KaiosMarketDownloader
                 UpdateLabel();
                 for (int i = 0; i < allapps.Count; i++)
                 {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        return;
+                    }
                     now = i + 1;
 
                     KaiosStoneItem item = allapps[i];
@@ -457,7 +472,11 @@ namespace KaiosMarketDownloader
 
                 for (int i = 0; i < threadCount; i++)
                 {
-                    var threadnow = new Thread(DownThread);
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    var threadnow = new Thread(() => DownThread(cancellationToken));
                     threadnow.IsBackground = true;
                     threadnow.Start();
                     threadnow.Name = (i + 1).ToString();

@@ -1,10 +1,7 @@
-using EasyHttp.Http;
 using Newtonsoft.Json.Linq;
 using System;
 using HawkNet;
-using static System.Net.Mime.MediaTypeNames;
 using System.Net;
-using System.Security.Policy;
 using System.Text;
 using System.Diagnostics;
 using System.Security.Cryptography;
@@ -53,49 +50,7 @@ namespace KaiosMarketDownloader.utils
 
         public static string getKey()
         {
-            if (jsonSetting == null)
-            {
-                jsonSetting = JObject.Parse(settingsStr);
-            }
-            var ret = "";
-            
-            model = jsonSetting["dev"]["model"].ToString();
-
-            EasyHttp.Http.HttpClient httpClient = new EasyHttp.Http.HttpClient();
-
-            httpClient.Request.Proxy = CustomProxy ?? WebProxy.GetDefaultProxy();
-
-            var datajson = new JObject();
-            datajson["brand"] = jsonSetting["dev"]["brand"];
-            datajson["device_id"] = jsonSetting["dev"]["imei"];
-            datajson["device_type"] = jsonSetting["dev"]["type"];
-            datajson["model"] = jsonSetting["dev"]["model"];
-            datajson["os"] = jsonSetting["dev"]["os"];
-            datajson["os_version"] = jsonSetting["dev"]["version"];
-            datajson["reference"] = jsonSetting["dev"]["cu"];
-
-            var path = "/v3.0/applications/" + jsonSetting["api"]["app"]["id"].ToString() + "/tokens";
-
-            httpClient.Request.AddExtraHeader("Authorization", "Key " + authkey);
-
-            string url = jsonSetting["api"]["server"]["url"].ToString() + path;
-
-            httpClient.Request.AddExtraHeader("Kai-API-Version", jsonSetting["api"]["ver"].ToString());
-
-
-            var reqinfo = "ct=\"wifi\", rt=\"auto\", utc=\"" + GetTimeStamp() + "\", utc_off=\"1\", " + "mcc=\"" + jsonSetting["dev"]["mcc"].ToString() + "\", " + "mnc=\"" + jsonSetting["dev"]["mnc"].ToString() + "\", " + "net_mcc=\"null\", " + "net_mnc=\"null\"";
-
-            httpClient.Request.AddExtraHeader("Kai-Request-Info", reqinfo);
-
-            httpClient.Request.AddExtraHeader("Kai-Device-Info", "imei=\"" + jsonSetting["dev"]["imei"].ToString() + "\", curef = \"" + jsonSetting["dev"]["cu"].ToString() + "\"");
-            httpClient.Request.UserAgent = jsonSetting["dev"]["ua"].ToString();
-            httpClient.Request.ContentType = "application/json";
-
-
-            ret = httpClient.Post(url, datajson.ToString(), "application/json").RawText;
-            token = ret;
-            return ret;
-
+            return getKeyAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -116,195 +71,12 @@ namespace KaiosMarketDownloader.utils
 
         public static string Request(string method, string path, string data)
         {
-            if (jsonSetting == null)
-            {
-                jsonSetting = JObject.Parse(settingsStr);
-            }
-            var ret = "";
-
-            EasyHttp.Http.HttpClient httpClient = new EasyHttp.Http.HttpClient();
-            httpClient.Request.Proxy = CustomProxy ?? WebProxy.GetDefaultProxy();
-            var datajson = new JObject();
-            datajson["brand"] = jsonSetting["dev"]["brand"];
-            datajson["device_id"] = jsonSetting["dev"]["imei"];
-            datajson["device_type"] = jsonSetting["dev"]["type"];
-            datajson["model"] = jsonSetting["dev"]["model"];
-            datajson["os"] = jsonSetting["dev"]["os"];
-            datajson["os_version"] = jsonSetting["dev"]["version"];
-            datajson["reference"] = jsonSetting["dev"]["cu"];
-
-            //path = "/v3.0/applications/" + jsonSetting["api"]["app"]["id"].ToString() + "/tokens";
-
-            //httpClient.Request.AddExtraHeader("Authorization", "Key " + authkey);
-            string url = "";
-            if (path.StartsWith("http://") || path.StartsWith("https://"))
-            {
-                url = path;
-
-            }
-            else
-            {
-                url = jsonSetting["api"]["server"]["url"].ToString() + path;
-
-            }
-            httpClient.Request.Timeout = 30000;
-
-            httpClient.Request.AddExtraHeader("Kai-API-Version", jsonSetting["api"]["ver"].ToString());
-
-            var reqinfo = "ct=\"wifi\", rt=\"auto\", utc=\"" + GetTimeStamp() + "\", utc_off=\"1\", " + "mcc=\"" + jsonSetting["dev"]["mcc"].ToString() + "\", " + "mnc=\"" + jsonSetting["dev"]["mnc"].ToString() + "\", " + "net_mcc=\"null\", " + "net_mnc=\"null\"";
-
-            httpClient.Request.AddExtraHeader("Kai-Request-Info", reqinfo);
-
-            httpClient.Request.AddExtraHeader("Kai-Device-Info", "imei=\"" + jsonSetting["dev"]["imei"].ToString() + "\", curef=\"" + jsonSetting["dev"]["cu"].ToString() + "\"");
-            httpClient.Request.UserAgent = jsonSetting["dev"]["ua"].ToString();
-            httpClient.Request.ContentType = "application/json";
-
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                var jsontoken = JObject.Parse(token);
-                string host = new Uri(url).Host;
-                Uri uri = new Uri(url);
-                DateTime? ts = null;
-                string nonce = null;
-                string payloadHash = null;
-                string type = null;
-                if (string.IsNullOrEmpty(nonce))
-                {
-                    nonce = Hawk.GetRandomString(6);
-                }
-
-                if (string.IsNullOrEmpty(type))
-                {
-                    type = "header";
-                }
-                //var auth = HawkNet.Hawk.GetAuthorizationHeader(new Uri(url).Host, method, new Uri(url), hawkCredential);
-                string text = ((int)Math.Floor(HawkNet.Hawk.ConvertToUnixTimestamp(ts.HasValue ? ts.Value : DateTime.UtcNow))).ToString();
-
-
-                HMAC hMAC = null;
-
-                hMAC = new HMACSHA256();
-
-                hMAC.Key = Convert.FromBase64String(jsontoken["mac_key"].ToString());
-                string text11 = ((host.IndexOf(':') > 0) ? host.Substring(0, host.IndexOf(':')) : host);
-                string text22 = "hawk.1." + type + "\n" + text + "\n" + nonce + "\n" + method.ToUpper() + "\n" + uri.PathAndQuery + "\n" + text11 + "\n" + uri.Port + "\n" + ((!string.IsNullOrEmpty(payloadHash)) ? payloadHash : "") + "\n" + "\n";
-
-                string text33 = Convert.ToBase64String(hMAC.ComputeHash(Encoding.UTF8.GetBytes(text22)));
-
-                string text3 = $"id=\"{jsontoken["kid"].ToString()}\", ts=\"{text}\", nonce=\"{nonce}\", mac=\"{text33}\"";
-                if (!string.IsNullOrEmpty(payloadHash))
-                {
-                    text3 += $", hash=\"{payloadHash}\"";
-                }
-                httpClient.Request.AddExtraHeader("Authorization", "Hawk " + text3);
-
-            }
-            if (method == "POST")
-            {
-                ret = httpClient.Post(url, datajson.ToString(), "application/json").RawText;
-
-
-            }
-            else if (method == "GET")
-            {
-
-                ret = httpClient.Get(url).RawText;
-
-            }
-            return ret;
+            return RequestAsync(method, path, data, CancellationToken.None).GetAwaiter().GetResult();
         }
 
         public static byte[] RequestDown(string method, string path, string data)
         {
-            if (jsonSetting == null)
-            {
-                jsonSetting = JObject.Parse(settingsStr);
-            }
-
-            EasyHttp.Http.HttpClient httpClient = new EasyHttp.Http.HttpClient();
-            httpClient.Request.Proxy = CustomProxy ?? WebProxy.GetDefaultProxy();
-
-            var datajson = new JObject();
-            datajson["brand"] = jsonSetting["dev"]["brand"];
-            datajson["device_id"] = jsonSetting["dev"]["imei"];
-            datajson["device_type"] = jsonSetting["dev"]["type"];
-            datajson["model"] = jsonSetting["dev"]["model"];
-            datajson["os"] = jsonSetting["dev"]["os"];
-            datajson["os_version"] = jsonSetting["dev"]["version"];
-            datajson["reference"] = jsonSetting["dev"]["cu"];
-
-            //path = "/v3.0/applications/" + jsonSetting["api"]["app"]["id"].ToString() + "/tokens";
-
-            //httpClient.Request.AddExtraHeader("Authorization", "Key " + authkey);
-
-            string url = path;
-
-            httpClient.Request.AddExtraHeader("Kai-API-Version", jsonSetting["api"]["ver"].ToString());
-
-
-            var reqinfo = "ct=\"wifi\", rt=\"auto\", utc=\"" + GetTimeStamp() + "\", utc_off=\"1\", " + "mcc=\"" + jsonSetting["dev"]["mcc"].ToString() + "\", " + "mnc=\"" + jsonSetting["dev"]["mnc"].ToString() + "\", " + "net_mcc=\"null\", " + "net_mnc=\"null\"";
-
-            httpClient.Request.AddExtraHeader("Kai-Request-Info", reqinfo);
-
-            httpClient.Request.AddExtraHeader("Kai-Device-Info", "imei=\"" + jsonSetting["dev"]["imei"].ToString() + "\", curef=\"" + jsonSetting["dev"]["cu"].ToString() + "\"");
-            httpClient.Request.UserAgent = jsonSetting["dev"]["ua"].ToString();
-            httpClient.Request.ContentType = "application/json";
-            httpClient.StreamResponse = true;
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                var jsontoken = JObject.Parse(token);
-                string host = new Uri(url).Host;
-                Uri uri = new Uri(url);
-                DateTime? ts = null;
-                string nonce = null;
-                string payloadHash = null;
-                string type = null;
-                if (string.IsNullOrEmpty(nonce))
-                {
-                    nonce = Hawk.GetRandomString(6);
-                }
-
-                if (string.IsNullOrEmpty(type))
-                {
-                    type = "header";
-                }
-                //var auth = HawkNet.Hawk.GetAuthorizationHeader(new Uri(url).Host, method, new Uri(url), hawkCredential);
-                string text = ((int)Math.Floor(HawkNet.Hawk.ConvertToUnixTimestamp(ts.HasValue ? ts.Value : DateTime.UtcNow))).ToString();
-
-
-                HMAC hMAC = null;
-
-                hMAC = new HMACSHA256();
-
-                hMAC.Key = Convert.FromBase64String(jsontoken["mac_key"].ToString());
-                string text11 = ((host.IndexOf(':') > 0) ? host.Substring(0, host.IndexOf(':')) : host);
-                string text22 = "hawk.1." + type + "\n" + text + "\n" + nonce + "\n" + method.ToUpper() + "\n" + uri.PathAndQuery + "\n" + text11 + "\n" + uri.Port + "\n" + ((!string.IsNullOrEmpty(payloadHash)) ? payloadHash : "") + "\n" + "\n";
-
-                string text33 = Convert.ToBase64String(hMAC.ComputeHash(Encoding.UTF8.GetBytes(text22)));
-
-                string text3 = $"id=\"{jsontoken["kid"].ToString()}\", ts=\"{text}\", nonce=\"{nonce}\", mac=\"{text33}\"";
-                if (!string.IsNullOrEmpty(payloadHash))
-                {
-                    text3 += $", hash=\"{payloadHash}\"";
-                }
-                httpClient.Request.AddExtraHeader("Authorization", "Hawk " + text3);
-
-            }
-            Stream retstream = null;
-            if (method == "POST")
-            {
-                retstream = httpClient.Post(url, datajson.ToString(), "application/json").ResponseStream; ;
-
-            }
-            else if (method == "GET")
-            {
-                retstream = httpClient.Get(url).ResponseStream;
-            }
-            MemoryStream ms = new MemoryStream();
-            retstream.CopyTo(ms);
-            ms.Seek(0, SeekOrigin.Begin);
-
-            return ms.ToArray();
+            return RequestDownAsync(method, path, data, CancellationToken.None).GetAwaiter().GetResult();
         }
         /// <summary>
         /// 获得13位的时间戳
@@ -322,7 +94,7 @@ namespace KaiosMarketDownloader.utils
           /// <returns>long</returns>  
         private static long ConvertDateTimeToInt(System.DateTime time)
         {
-            System.DateTime startTime = TimeZone.CurrentTimeZone.ToLocalTime(new System.DateTime(1970, 1, 1, 0, 0, 0, 0));
+            System.DateTime startTime = TimeZoneInfo.ConvertTimeToUtc(new System.DateTime(1970, 1, 1, 0, 0, 0, 0)).ToLocalTime();
             long t = (time.Ticks - startTime.Ticks) / 10000;   //除10000调整为13位      
             return t;
         }
@@ -352,7 +124,8 @@ namespace KaiosMarketDownloader.utils
 
             var handler = new HttpClientHandler
             {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                Proxy = CustomProxy
             };
 
             using (var client = new System.Net.Http.HttpClient(handler))
@@ -398,7 +171,8 @@ namespace KaiosMarketDownloader.utils
 
             var handler = new HttpClientHandler
             {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                Proxy = CustomProxy
             };
 
             using (var httpClient = new System.Net.Http.HttpClient(handler))
@@ -472,7 +246,8 @@ namespace KaiosMarketDownloader.utils
             string url = path;
             var handler = new HttpClientHandler
             {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                Proxy = CustomProxy
             };
 
             using (var client = new System.Net.Http.HttpClient(handler))
