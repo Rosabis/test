@@ -109,7 +109,7 @@ public final class EdgeStableDevUnlockHook implements IXposedHookLoadPackage {
                 if (!Modifier.isStatic(m.getModifiers())) {
                     continue;
                 }
-                if (m.getReturnType() != boolean.TYPE && m.getReturnType() != Boolean.class) {
+                if (m.getReturnType() != Boolean.TYPE && m.getReturnType() != Boolean.class) {
                     continue;
                 }
                 if (!"isEnabled".equals(m.getName())) {
