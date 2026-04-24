@@ -296,10 +296,16 @@ class MainActivity : AppCompatActivity() {
         try {
             ZipFile(archive).use { zip ->
                 val entries = zip.entries().asList()
+
+                // 1. First try to find base.apk
                 val targetEntry = entries.firstOrNull { entry ->
                     !entry.isDirectory && entry.name.lowercase().endsWith("base.apk")
-                } ?: entries.firstOrNull { entry ->
-                    !entry.isDirectory && entry.name.lowercase().endsWith(".apk")
+                } ?: run {
+                    // 2. If no base.apk, find the largest .apk file
+                    val apkEntries = entries.filter { entry ->
+                        !entry.isDirectory && entry.name.lowercase().endsWith(".apk")
+                    }
+                    apkEntries.maxByOrNull { it.size }
                 }
 
                 if (targetEntry != null) {
