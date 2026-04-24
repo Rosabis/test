@@ -23,6 +23,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Enumeration
 import java.util.zip.ZipFile
 import kotlin.concurrent.thread
 import kotlin.io.path.createTempFile
@@ -131,7 +132,11 @@ class MainActivity : AppCompatActivity() {
 
             val parsedItems = mutableListOf<ApkItem>()
             candidates.forEach { file ->
-                val parsed = parseApkMeta(this, file)
+                val parsed = try {
+                    parseApkMeta(this, file)
+                } catch (_: Exception) {
+                    null
+                }
                 if (parsed != null) parsedItems.add(parsed)
             }
 
@@ -204,23 +209,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun extractOneApkFromArchive(context: Context, archiveUri: Uri): File? {
-        val archive = copyUriToTempFile(context, archiveUri, ".zip")
-        ZipFile(archive).use { zip ->
-            val targetEntry = zip.entries().toList().firstOrNull { entry ->
-                !entry.isDirectory && entry.name.lowercase().endsWith("base.apk")
-            } ?: zip.entries().toList().firstOrNull { entry ->
-                !entry.isDirectory && entry.name.lowercase().endsWith(".apk")
-            }
-
-            if (targetEntry != null) {
-                val out = createTempFile(prefix = "inner_", suffix = ".apk").toFile()
-                zip.getInputStream(targetEntry).use { input ->
-                    FileOutputStream(out).use { output -> input.copyTo(output) }
+        val archive = copyUriToTempFile(context, archiveUri, ".zip") ?: return null
+        try {
+            ZipFile(archive).use { zip ->
+                val entries = zip.entries().asList()
+                val targetEntry = entries.firstOrNull { entry ->
+                    !entry.isDirectory && entry.name.lowercase().endsWith("base.apk")
+                } ?: entries.firstOrNull { entry ->
+                    !entry.isDirectory && entry.name.lowercase().endsWith(".apk")
                 }
-                return out
+
+                if (targetEntry != null) {
+                    val out = createTempFile(prefix = "inner_", suffix = ".apk").toFile()
+                    zip.getInputStream(targetEntry).use { input ->
+                        FileOutputStream(out).use { output -> input.copyTo(output) }
+                    }
+                    return out
+                }
             }
+        } catch (_: Exception) {
+            return null
+        } finally {
+            archive.delete()
         }
         return null
+    }
+
+    private fun <T> Enumeration<T>.asList(): List<T> {
+        val list = mutableListOf<T>()
+        while (hasMoreElements()) list.add(nextElement())
+        return list
     }
 
     private fun copyUriToTempFile(context: Context, uri: Uri, suffix: String): File? {
