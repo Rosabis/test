@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_SEPARATOR = "separator"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_FIELD_ORDER = "field_order"
+        private const val KEY_IGNORE_EXT = "ignore_ext"
         private const val KEY_USE_APP_NAME = "use_app_name"
         private const val KEY_USE_PACKAGE = "use_package"
         private const val KEY_USE_VERSION_NAME = "use_version_name"
@@ -56,6 +57,7 @@ class MainActivity : AppCompatActivity() {
     private val allowedExt = setOf("apk", "apks", "apkm", "xapk")
     private var selectedTreeUri: Uri? = null
     private var includeSubDirs = false
+    private var ignoreFileExt = false
     private var useAppName = true
     private var usePackageName = false
     private var useVersionName = true
@@ -208,16 +210,38 @@ class MainActivity : AppCompatActivity() {
     private fun collectCandidates(root: DocumentFile, recursive: Boolean, out: MutableList<DocumentFile>) {
         root.listFiles().forEach { file ->
             when {
-                file.isFile && isAllowed(file.name) -> out.add(file)
+                file.isFile && isAllowedExt(file.name) -> out.add(file)
+                file.isFile && ignoreFileExt && !isAllowedExt(file.name) -> {
+                    if (hasZipHeader(file)) out.add(file)
+                }
                 recursive && file.isDirectory -> collectCandidates(file, true, out)
             }
         }
     }
 
-    private fun isAllowed(name: String?): Boolean {
+    private fun isAllowedExt(name: String?): Boolean {
         if (name.isNullOrBlank() || !name.contains(".")) return false
         val ext = name.substringAfterLast('.').lowercase()
         return ext in allowedExt
+    }
+
+    private fun hasZipHeader(file: DocumentFile): Boolean {
+        return try {
+            contentResolver.openInputStream(file.uri)?.use { input ->
+                val header = ByteArray(4)
+                val bytesRead = input.read(header)
+                if (bytesRead >= 4) {
+                    // ZIP magic number: 0x504B0304
+                    return header[0] == 0x50.toByte() &&
+                            header[1] == 0x4B.toByte() &&
+                            header[2] == 0x03.toByte() &&
+                            header[3] == 0x04.toByte()
+                }
+            }
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun parseApkMeta(context: Context, file: DocumentFile): ApkItem? {
@@ -225,7 +249,12 @@ class MainActivity : AppCompatActivity() {
         val sourceFile = when (ext) {
             "apk" -> copyUriToTempFile(context, file.uri, ".apk")
             "apks", "apkm", "xapk" -> extractOneApkFromArchive(context, file.uri)
-            else -> null
+            else -> {
+                // Non-standard extension: if ignoreFileExt is enabled and file is ZIP, treat as archive
+                if (ignoreFileExt && hasZipHeader(file)) {
+                    extractOneApkFromArchive(context, file.uri)
+                } else null
+            }
         } ?: return null
 
         try {
@@ -382,6 +411,7 @@ class MainActivity : AppCompatActivity() {
     private fun showSettingsDialog() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_settings, null, false)
         val cbRecursive = view.findViewById<CheckBox>(R.id.cbRecursive)
+        val cbIgnoreExt = view.findViewById<CheckBox>(R.id.cbIgnoreExt)
         val spSeparator = view.findViewById<Spinner>(R.id.spSeparator)
         val btnPickDir = view.findViewById<Button>(R.id.btnPickDir)
         val rgTheme = view.findViewById<RadioGroup>(R.id.rgTheme)
@@ -399,6 +429,7 @@ class MainActivity : AppCompatActivity() {
         spSeparator.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, separators)
         spSeparator.setSelection((separators.indexOf(selectedSeparator)).coerceAtLeast(0))
         cbRecursive.isChecked = includeSubDirs
+        cbIgnoreExt.isChecked = ignoreFileExt
 
         btnPickDir.setOnClickListener { dirPicker.launch(null) }
 
@@ -459,6 +490,7 @@ class MainActivity : AppCompatActivity() {
             .setView(view)
             .setPositiveButton(getString(R.string.save)) { _, _ ->
                 includeSubDirs = cbRecursive.isChecked
+                ignoreFileExt = cbIgnoreExt.isChecked
                 fieldOrder = dragItems.map { it.fieldKey }.toMutableList()
                 useAppName = selectedMap[FIELD_APP_NAME] == true
                 usePackageName = selectedMap[FIELD_PACKAGE] == true
@@ -483,6 +515,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadSettings() {
         includeSubDirs = prefs.getBoolean(KEY_INCLUDE_SUB_DIRS, false)
+        ignoreFileExt = prefs.getBoolean(KEY_IGNORE_EXT, false)
         selectedSeparator = prefs.getString(KEY_SEPARATOR, "_") ?: "_"
         useAppName = prefs.getBoolean(KEY_USE_APP_NAME, true)
         usePackageName = prefs.getBoolean(KEY_USE_PACKAGE, false)
@@ -503,6 +536,7 @@ class MainActivity : AppCompatActivity() {
     private fun saveSettings() {
         prefs.edit()
             .putBoolean(KEY_INCLUDE_SUB_DIRS, includeSubDirs)
+            .putBoolean(KEY_IGNORE_EXT, ignoreFileExt)
             .putString(KEY_SEPARATOR, selectedSeparator)
             .putBoolean(KEY_USE_APP_NAME, useAppName)
             .putBoolean(KEY_USE_PACKAGE, usePackageName)
