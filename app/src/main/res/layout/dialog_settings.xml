@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <Button
+        android:id="@+id/btnPickDir"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/pick_directory" />
+
+    <CheckBox
+        android:id="@+id/cbRecursive"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/include_sub_dirs" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/name_fields_title"
+        android:textStyle="bold" />
+
+    <CheckBox
+        android:id="@+id/cbAppName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/field_app_name" />
+
+    <CheckBox
+        android:id="@+id/cbPackage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/field_package_name" />
+
+    <CheckBox
+        android:id="@+id/cbVersionName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/field_version_name" />
+
+    <CheckBox
+        android:id="@+id/cbVersionCode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/field_version_code" />
+
+    <Spinner
+        android:id="@+id/spSeparator"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" />
+</LinearLayout>

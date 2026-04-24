@@ -10,8 +10,13 @@
     <string name="field_version_name">版本名</string>
     <string name="field_version_code">版本号</string>
     <string name="rename_all">按规则重命名</string>
+    <string name="rollback_names">回滚名字</string>
     <string name="rename_done">重命名完成：%1$d 个</string>
+    <string name="rollback_done">回滚完成：%1$d 个</string>
     <string name="scan_done">扫描完成：%1$d 个</string>
     <string name="error_no_fields">请至少选择一个命名字段</string>
     <string name="error_no_dir">请先选择目录</string>
+    <string name="settings">设置</string>
+    <string name="save">保存</string>
+    <string name="cancel">取消</string>
 </resources>

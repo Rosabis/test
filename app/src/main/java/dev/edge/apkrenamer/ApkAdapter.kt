@@ -3,10 +3,14 @@ package dev.edge.apkrenamer
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CheckBox
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
-class ApkAdapter : RecyclerView.Adapter<ApkAdapter.Holder>() {
+class ApkAdapter(
+    private val onSelectionChanged: () -> Unit = {}
+) : RecyclerView.Adapter<ApkAdapter.Holder>() {
 
     private val data = mutableListOf<ApkItem>()
 
@@ -28,13 +32,23 @@ class ApkAdapter : RecyclerView.Adapter<ApkAdapter.Holder>() {
     override fun getItemCount(): Int = data.size
 
     class Holder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val tvFileName: TextView = itemView.findViewById(R.id.tvFileName)
-        private val tvInfo: TextView = itemView.findViewById(R.id.tvInfo)
+        private val ivIcon: ImageView = itemView.findViewById(R.id.ivIcon)
+        private val tvAppName: TextView = itemView.findViewById(R.id.tvAppName)
+        private val tvOldName: TextView = itemView.findViewById(R.id.tvOldName)
+        private val tvNewName: TextView = itemView.findViewById(R.id.tvNewName)
+        private val cbSelect: CheckBox = itemView.findViewById(R.id.cbSelect)
 
         fun bind(item: ApkItem) {
-            tvFileName.text = item.file.name ?: "(unknown)"
-            tvInfo.text =
-                "app=${item.appName}\npkg=${item.packageName}\nverName=${item.versionName}\nverCode=${item.versionCode}"
+            ivIcon.setImageDrawable(item.icon ?: itemView.context.getDrawable(android.R.drawable.sym_def_app_icon))
+            tvAppName.text = item.appName
+            tvOldName.text = "当前: ${item.currentName}"
+            tvNewName.text = "新名: ${item.plannedName}"
+            cbSelect.setOnCheckedChangeListener(null)
+            cbSelect.isChecked = item.isSelected
+            cbSelect.setOnCheckedChangeListener { _, isChecked ->
+                item.isSelected = isChecked
+                onSelectionChanged()
+            }
         }
     }
 }
