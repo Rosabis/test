@@ -550,7 +550,7 @@ class MainActivity : AppCompatActivity() {
             .putBoolean(KEY_USE_VERSION_CODE, useVersionCode)
             .putInt(KEY_THEME_MODE, themeMode)
             .putString(KEY_FIELD_ORDER, fieldOrder.joinToString(","))
-            .apply()
+            .commit()
     }
 
     private fun applyThemeMode(mode: Int) {
