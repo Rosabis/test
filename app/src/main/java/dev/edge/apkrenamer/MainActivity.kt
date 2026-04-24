@@ -2,6 +2,7 @@ package dev.edge.apkrenamer
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -11,13 +12,18 @@ import android.view.LayoutInflater
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.CompoundButton
+import android.widget.RadioGroup
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.ProgressBar
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.documentfile.provider.DocumentFile
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
@@ -29,6 +35,23 @@ import kotlin.concurrent.thread
 import kotlin.io.path.createTempFile
 
 class MainActivity : AppCompatActivity() {
+    companion object {
+        private const val PREFS_NAME = "app_settings"
+        private const val KEY_TREE_URI = "tree_uri"
+        private const val KEY_INCLUDE_SUB_DIRS = "include_sub_dirs"
+        private const val KEY_SEPARATOR = "separator"
+        private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_FIELD_ORDER = "field_order"
+        private const val KEY_USE_APP_NAME = "use_app_name"
+        private const val KEY_USE_PACKAGE = "use_package"
+        private const val KEY_USE_VERSION_NAME = "use_version_name"
+        private const val KEY_USE_VERSION_CODE = "use_version_code"
+
+        private const val FIELD_APP_NAME = "appName"
+        private const val FIELD_PACKAGE = "package"
+        private const val FIELD_VERSION_NAME = "versionName"
+        private const val FIELD_VERSION_CODE = "versionCode"
+    }
 
     private val allowedExt = setOf("apk", "apks", "apkm", "xapk")
     private var selectedTreeUri: Uri? = null
@@ -38,7 +61,9 @@ class MainActivity : AppCompatActivity() {
     private var useVersionName = true
     private var useVersionCode = true
     private var selectedSeparator = "_"
+    private var fieldOrder = mutableListOf(FIELD_APP_NAME, FIELD_PACKAGE, FIELD_VERSION_NAME, FIELD_VERSION_CODE)
     private var isScanning = false
+    private var themeMode = AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
 
     private val items = mutableListOf<ApkItem>()
     private val adapter: ApkAdapter by lazy {
@@ -48,8 +73,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private val renameHistory = mutableListOf<Pair<DocumentFile, String>>()
+    private lateinit var prefs: SharedPreferences
 
     private lateinit var tvDir: TextView
+    private lateinit var tvScanProgress: TextView
+    private lateinit var pbScan: ProgressBar
 
     private val dirPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -59,12 +87,16 @@ class MainActivity : AppCompatActivity() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
                 selectedTreeUri = uri
+                prefs.edit().putString(KEY_TREE_URI, uri.toString()).apply()
                 tvDir.text = uri.toString()
             }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        loadSettings()
+        applyThemeMode(themeMode)
         setContentView(R.layout.activity_main)
 
         findViewById<MaterialToolbar>(R.id.toolbar).setOnMenuItemClickListener { menuItem ->
@@ -89,7 +121,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         tvDir = findViewById(R.id.tvDir)
-        tvDir.text = getString(R.string.no_directory_selected)
+        tvScanProgress = findViewById(R.id.tvScanProgress)
+        pbScan = findViewById(R.id.pbScan)
+        tvDir.text = selectedTreeUri?.toString() ?: getString(R.string.no_directory_selected)
 
         findViewById<RecyclerView>(R.id.rvItems).apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
@@ -116,28 +150,47 @@ class MainActivity : AppCompatActivity() {
     private fun scanFilesAsync(uri: Uri, recursive: Boolean) {
         if (isScanning) return
         isScanning = true
-        toast("开始扫描...")
+        runOnUiThread {
+            tvScanProgress.visibility = TextView.VISIBLE
+            pbScan.visibility = ProgressBar.VISIBLE
+            pbScan.isIndeterminate = true
+            pbScan.progress = 0
+            tvScanProgress.text = getString(R.string.scan_progress_preparing)
+        }
 
         thread(start = true) {
             val root = DocumentFile.fromTreeUri(this, uri)
             if (root == null) {
                 runOnUiThread {
                     isScanning = false
+                    hideScanProgress()
                 }
                 return@thread
             }
 
             val candidates = mutableListOf<DocumentFile>()
             collectCandidates(root, recursive, candidates)
+            val total = candidates.size
+            runOnUiThread {
+                pbScan.isIndeterminate = false
+                pbScan.max = total.coerceAtLeast(1)
+                pbScan.progress = 0
+                tvScanProgress.text = getString(R.string.scan_progress_value, 0, total)
+            }
 
             val parsedItems = mutableListOf<ApkItem>()
-            candidates.forEach { file ->
+            candidates.forEachIndexed { index, file ->
                 val parsed = try {
                     parseApkMeta(this, file)
                 } catch (_: Exception) {
                     null
                 }
                 if (parsed != null) parsedItems.add(parsed)
+                val progress = index + 1
+                runOnUiThread {
+                    pbScan.progress = progress
+                    tvScanProgress.text = getString(R.string.scan_progress_value, progress, total)
+                }
             }
 
             runOnUiThread {
@@ -147,6 +200,7 @@ class MainActivity : AppCompatActivity() {
                 refreshPlannedNames()
                 adapter.submit(items)
                 toast(getString(R.string.scan_done, items.size))
+                hideScanProgress()
             }
         }
     }
@@ -254,26 +308,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildName(item: ApkItem, sep: String): String {
+        val enabled = mapOf(
+            FIELD_APP_NAME to useAppName,
+            FIELD_PACKAGE to usePackageName,
+            FIELD_VERSION_NAME to useVersionName,
+            FIELD_VERSION_CODE to useVersionCode
+        )
         val parts = mutableListOf<String>()
-        if (useAppName) parts.add(item.appName)
-        if (usePackageName) parts.add(item.packageName)
-        if (useVersionName) parts.add(item.versionName)
-        if (useVersionCode) parts.add(item.versionCode)
+        fieldOrder.forEach { key ->
+            if (enabled[key] != true) return@forEach
+            when (key) {
+                FIELD_APP_NAME -> parts.add(item.appName)
+                FIELD_PACKAGE -> parts.add(item.packageName)
+                FIELD_VERSION_NAME -> parts.add(item.versionName)
+                FIELD_VERSION_CODE -> parts.add(item.versionCode)
+            }
+        }
         return parts.joinToString(sep).sanitizeForFileName().ifBlank { "app" }
     }
 
     private fun renameFiles(): Int {
-        val sep = selectedSeparator
-        val used = mutableSetOf<String>()
         var renamed = 0
 
         items.forEach { item ->
             if (!item.isSelected) return@forEach
             val oldName = item.file.name ?: return@forEach
-            val ext = oldName.substringAfterLast('.', "")
-            val base = buildName(item, sep)
-            val uniqueBase = makeUnique(base, used)
-            val newName = "$uniqueBase.$ext"
+            val newName = item.plannedName
+            if (newName == oldName) return@forEach
             val success = item.file.renameTo(newName)
             if (success) {
                 renamed++
@@ -321,58 +382,232 @@ class MainActivity : AppCompatActivity() {
     private fun showSettingsDialog() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_settings, null, false)
         val cbRecursive = view.findViewById<CheckBox>(R.id.cbRecursive)
-        val cbAppName = view.findViewById<CheckBox>(R.id.cbAppName)
-        val cbPackage = view.findViewById<CheckBox>(R.id.cbPackage)
-        val cbVersionName = view.findViewById<CheckBox>(R.id.cbVersionName)
-        val cbVersionCode = view.findViewById<CheckBox>(R.id.cbVersionCode)
         val spSeparator = view.findViewById<Spinner>(R.id.spSeparator)
         val btnPickDir = view.findViewById<Button>(R.id.btnPickDir)
+        val rgTheme = view.findViewById<RadioGroup>(R.id.rgTheme)
+        val rvFieldOrder = view.findViewById<RecyclerView>(R.id.rvFieldOrder)
+
+        val workingOrder = fieldOrder.toMutableList()
+        val selectedMap = mutableMapOf(
+            FIELD_APP_NAME to useAppName,
+            FIELD_PACKAGE to usePackageName,
+            FIELD_VERSION_NAME to useVersionName,
+            FIELD_VERSION_CODE to useVersionCode
+        )
 
         val separators = listOf("_", " ", "-", "+", ".")
         spSeparator.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, separators)
         spSeparator.setSelection((separators.indexOf(selectedSeparator)).coerceAtLeast(0))
         cbRecursive.isChecked = includeSubDirs
-        cbAppName.isChecked = useAppName
-        cbPackage.isChecked = usePackageName
-        cbVersionName.isChecked = useVersionName
-        cbVersionCode.isChecked = useVersionCode
 
         btnPickDir.setOnClickListener { dirPicker.launch(null) }
+
+        when (themeMode) {
+            AppCompatDelegate.MODE_NIGHT_NO -> rgTheme.check(R.id.rbThemeLight)
+            AppCompatDelegate.MODE_NIGHT_YES -> rgTheme.check(R.id.rbThemeDark)
+            else -> rgTheme.check(R.id.rbThemeSystem)
+        }
+
+        fun labelForField(field: String): String = when (field) {
+            FIELD_APP_NAME -> getString(R.string.field_app_name)
+            FIELD_PACKAGE -> getString(R.string.field_package_name)
+            FIELD_VERSION_NAME -> getString(R.string.field_version_name)
+            FIELD_VERSION_CODE -> getString(R.string.field_version_code)
+            else -> field
+        }
+
+        val dragItems = workingOrder.map { FieldOrderItem(it, selectedMap[it] == true) }.toMutableList()
+
+        val orderAdapter = FieldOrderAdapter(
+            items = dragItems,
+            labelProvider = ::labelForField,
+            onCheckedChanged = { key, isChecked -> selectedMap[key] = isChecked }
+        )
+        rvFieldOrder.layoutManager = LinearLayoutManager(this)
+        rvFieldOrder.adapter = orderAdapter
+
+        val touchHelper = ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN,
+            0
+        ) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                val from = viewHolder.bindingAdapterPosition
+                val to = target.bindingAdapterPosition
+                if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION) return false
+                val moving = dragItems.removeAt(from)
+                dragItems.add(to, moving)
+                orderAdapter.notifyItemMoved(from, to)
+                return true
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) = Unit
+        })
+        touchHelper.attachToRecyclerView(rvFieldOrder)
+
+        orderAdapter.onStartDrag = { holder ->
+            if (holder.bindingAdapterPosition != RecyclerView.NO_POSITION) {
+                touchHelper.startDrag(holder)
+            }
+        }
 
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.settings))
             .setView(view)
             .setPositiveButton(getString(R.string.save)) { _, _ ->
                 includeSubDirs = cbRecursive.isChecked
-                useAppName = cbAppName.isChecked
-                usePackageName = cbPackage.isChecked
-                useVersionName = cbVersionName.isChecked
-                useVersionCode = cbVersionCode.isChecked
+                fieldOrder = dragItems.map { it.fieldKey }.toMutableList()
+                useAppName = selectedMap[FIELD_APP_NAME] == true
+                usePackageName = selectedMap[FIELD_PACKAGE] == true
+                useVersionName = selectedMap[FIELD_VERSION_NAME] == true
+                useVersionCode = selectedMap[FIELD_VERSION_CODE] == true
                 selectedSeparator = spSeparator.selectedItem?.toString() ?: "_"
+                themeMode = when (rgTheme.checkedRadioButtonId) {
+                    R.id.rbThemeLight -> AppCompatDelegate.MODE_NIGHT_NO
+                    R.id.rbThemeDark -> AppCompatDelegate.MODE_NIGHT_YES
+                    else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                }
 
                 items.forEach { item -> item.currentName = item.file.name.orEmpty() }
                 refreshPlannedNames()
                 adapter.notifyDataSetChanged()
+                saveSettings()
+                applyThemeMode(themeMode)
             }
             .setNegativeButton(getString(R.string.cancel), null)
             .show()
     }
 
-    private fun refreshPlannedNames() {
-        val used = mutableSetOf<String>()
-        items.forEach { item ->
-            if (!item.isSelected) {
-                item.plannedName = item.currentName
-                return@forEach
+    private fun loadSettings() {
+        includeSubDirs = prefs.getBoolean(KEY_INCLUDE_SUB_DIRS, false)
+        selectedSeparator = prefs.getString(KEY_SEPARATOR, "_") ?: "_"
+        useAppName = prefs.getBoolean(KEY_USE_APP_NAME, true)
+        usePackageName = prefs.getBoolean(KEY_USE_PACKAGE, false)
+        useVersionName = prefs.getBoolean(KEY_USE_VERSION_NAME, true)
+        useVersionCode = prefs.getBoolean(KEY_USE_VERSION_CODE, true)
+        themeMode = prefs.getInt(KEY_THEME_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+
+        val orderString = prefs.getString(KEY_FIELD_ORDER, null)
+        if (!orderString.isNullOrBlank()) {
+            val parsed = orderString.split(",").filter { it.isNotBlank() }.toMutableList()
+            if (parsed.size == 4 && parsed.toSet().size == 4) {
+                fieldOrder = parsed
             }
-            val ext = item.currentName.substringAfterLast('.', "")
-            val base = buildName(item, selectedSeparator)
-            val uniqueBase = makeUnique(base, used)
-            item.plannedName = "$uniqueBase.$ext"
+        }
+        selectedTreeUri = prefs.getString(KEY_TREE_URI, null)?.let { Uri.parse(it) }
+    }
+
+    private fun saveSettings() {
+        prefs.edit()
+            .putBoolean(KEY_INCLUDE_SUB_DIRS, includeSubDirs)
+            .putString(KEY_SEPARATOR, selectedSeparator)
+            .putBoolean(KEY_USE_APP_NAME, useAppName)
+            .putBoolean(KEY_USE_PACKAGE, usePackageName)
+            .putBoolean(KEY_USE_VERSION_NAME, useVersionName)
+            .putBoolean(KEY_USE_VERSION_CODE, useVersionCode)
+            .putInt(KEY_THEME_MODE, themeMode)
+            .putString(KEY_FIELD_ORDER, fieldOrder.joinToString(","))
+            .apply()
+    }
+
+    private fun applyThemeMode(mode: Int) {
+        AppCompatDelegate.setDefaultNightMode(mode)
+    }
+
+    private fun refreshPlannedNames() {
+        val byParent = items.groupBy { it.file.parentFile?.uri?.toString().orEmpty() }
+        byParent.values.forEach { group ->
+            val occupiedNames = mutableSetOf<String>()
+            group.firstOrNull()?.file?.parentFile?.listFiles()?.forEach { sibling ->
+                sibling.name?.let { occupiedNames.add(it) }
+            }
+
+            group.forEach { item ->
+                val current = item.currentName
+                if (!item.isSelected) {
+                    item.plannedName = current
+                    return@forEach
+                }
+
+                val ext = current.substringAfterLast('.', "")
+                val base = buildName(item, selectedSeparator)
+                var candidate = "$base.$ext"
+
+                if (candidate != current && candidate in occupiedNames) {
+                    var index = 2
+                    while (true) {
+                        val next = "${base}($index).$ext"
+                        if (next == current || next !in occupiedNames) {
+                            candidate = next
+                            break
+                        }
+                        index++
+                    }
+                }
+
+                item.plannedName = candidate
+                occupiedNames.remove(current)
+                occupiedNames.add(candidate)
+            }
         }
     }
 
     private fun toast(msg: String) {
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun hideScanProgress() {
+        tvScanProgress.visibility = TextView.GONE
+        pbScan.visibility = ProgressBar.GONE
+        pbScan.isIndeterminate = false
+    }
+
+    private data class FieldOrderItem(var fieldKey: String, var enabled: Boolean)
+
+    private class FieldOrderAdapter(
+        private val items: List<FieldOrderItem>,
+        private val labelProvider: (String) -> String,
+        private val onCheckedChanged: (String, Boolean) -> Unit
+    ) : RecyclerView.Adapter<FieldOrderAdapter.FieldOrderHolder>() {
+
+        var onStartDrag: ((RecyclerView.ViewHolder) -> Unit)? = null
+
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): FieldOrderHolder {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.item_field_order, parent, false)
+            return FieldOrderHolder(view)
+        }
+
+        override fun getItemCount(): Int = items.size
+
+        override fun onBindViewHolder(holder: FieldOrderHolder, position: Int) {
+            holder.bind(items[position], labelProvider, onCheckedChanged, onStartDrag)
+        }
+
+        class FieldOrderHolder(itemView: android.view.View) : RecyclerView.ViewHolder(itemView) {
+            private val cbEnabled = itemView.findViewById<CheckBox>(R.id.cbEnabled)
+            private val tvDragHandle = itemView.findViewById<TextView>(R.id.tvDragHandle)
+
+            fun bind(
+                item: FieldOrderItem,
+                labelProvider: (String) -> String,
+                onCheckedChanged: (String, Boolean) -> Unit,
+                onStartDrag: ((RecyclerView.ViewHolder) -> Unit)?
+            ) {
+                cbEnabled.setOnCheckedChangeListener(null)
+                cbEnabled.text = labelProvider(item.fieldKey)
+                cbEnabled.isChecked = item.enabled
+                cbEnabled.setOnCheckedChangeListener { _: CompoundButton, isChecked: Boolean ->
+                    item.enabled = isChecked
+                    onCheckedChanged(item.fieldKey, isChecked)
+                }
+                tvDragHandle.setOnLongClickListener {
+                    onStartDrag?.invoke(this)
+                    true
+                }
+            }
+        }
     }
 }

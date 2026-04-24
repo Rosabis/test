@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "dev.edge.apkrenamer"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.edge.apkrenamer"
         minSdk = 25
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 

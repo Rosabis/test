@@ -5,6 +5,7 @@
     <string name="include_sub_dirs">读取子目录</string>
     <string name="scan_files">扫描文件</string>
     <string name="name_fields_title">文件名组成（最多四项）</string>
+    <string name="name_separator">名称分隔符</string>
     <string name="field_app_name">应用名</string>
     <string name="field_package_name">包名</string>
     <string name="field_version_name">版本名</string>
@@ -19,4 +20,17 @@
     <string name="settings">设置</string>
     <string name="save">保存</string>
     <string name="cancel">取消</string>
+    <string name="category_general">常规设置</string>
+    <string name="category_customize">自定义</string>
+    <string name="category_filename">自定义文件名</string>
+    <string name="category_app">应用设置</string>
+    <string name="category_about">关于</string>
+    <string name="theme_follow_system">跟随系统</string>
+    <string name="theme_light">亮色</string>
+    <string name="theme_dark">暗色</string>
+    <string name="drag_sort_hint">长按右侧拖动图标调整顺序</string>
+    <string name="about_text">APK Rename Tool\n支持 APK/APKS/APKM/XAPK 扫描与批量重命名。</string>
+    <string name="scan_progress_idle">未开始扫描</string>
+    <string name="scan_progress_preparing">正在整理文件列表...</string>
+    <string name="scan_progress_value">扫描进度：%1$d/%2$d</string>
 </resources>
