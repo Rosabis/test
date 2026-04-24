@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
@@ -22,6 +23,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.documentfile.provider.DocumentFile
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -30,6 +35,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Enumeration
+import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import kotlin.concurrent.thread
 import kotlin.io.path.createTempFile
@@ -100,6 +106,15 @@ class MainActivity : AppCompatActivity() {
         loadSettings()
         applyThemeMode(themeMode)
         setContentView(R.layout.activity_main)
+
+        // Fix HyperOS/MIUI overlaying content under status/navigation bars.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val root = findViewById<View>(R.id.root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.updatePadding(top = sysBars.top, bottom = sysBars.bottom)
+            insets
+        }
 
         findViewById<MaterialToolbar>(R.id.toolbar).setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
@@ -290,6 +305,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun ZipEntry.effectiveSize(): Long {
+        // ZipEntry.size may be -1 for some archives; fallback to compressedSize.
+        val s = size
+        if (s >= 0) return s
+        val cs = compressedSize
+        if (cs >= 0) return cs
+        return 0L
+    }
+
     private fun extractOneApkFromArchive(context: Context, archiveUri: Uri): File? {
         val archive = copyUriToTempFile(context, archiveUri, ".zip") ?: return null
         try {
@@ -298,13 +322,13 @@ class MainActivity : AppCompatActivity() {
 
                 // 1. First try to find base.apk
                 val targetEntry = entries.firstOrNull { entry ->
-                    !entry.isDirectory && entry.name.lowercase().endsWith("base.apk")
+                    !entry.isDirectory && entry.name.substringAfterLast('/').equals("base.apk", ignoreCase = true)
                 } ?: run {
                     // 2. If no base.apk, find the largest .apk file
                     val apkEntries = entries.filter { entry ->
                         !entry.isDirectory && entry.name.lowercase().endsWith(".apk")
                     }
-                    apkEntries.maxByOrNull { it.size }
+                    apkEntries.maxByOrNull { it.effectiveSize() }
                 }
 
                 if (targetEntry != null) {
