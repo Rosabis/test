@@ -26,7 +26,7 @@ class ApkAdapter(
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
-        holder.bind(data[position])
+        holder.bind(data[position], onSelectionChanged)
     }
 
     override fun getItemCount(): Int = data.size
@@ -38,7 +38,7 @@ class ApkAdapter(
         private val tvNewName: TextView = itemView.findViewById(R.id.tvNewName)
         private val cbSelect: CheckBox = itemView.findViewById(R.id.cbSelect)
 
-        fun bind(item: ApkItem) {
+        fun bind(item: ApkItem, onSelectionChanged: () -> Unit) {
             ivIcon.setImageDrawable(item.icon ?: itemView.context.getDrawable(android.R.drawable.sym_def_app_icon))
             tvAppName.text = item.appName
             tvOldName.text = "当前: ${item.currentName}"
