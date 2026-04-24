@@ -11,8 +11,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven("https://maven.miui.com/nexus/content/repositories/public/")
-        maven("https://maven.aliyun.com/repository/public")
     }
 }
 
