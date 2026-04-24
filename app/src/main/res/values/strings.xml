@@ -32,7 +32,7 @@
     <string name="about_text">APK Rename Tool\n支持 APK/APKS/APKM/XAPK 扫描与批量重命名。</string>
     <string name="scan_progress_idle">未开始扫描</string>
     <string name="scan_progress_preparing">正在整理文件列表...</string>
-    <string name="scan_progress_value">扫描进度：%1$d/%2$d</string>
+    <string name="scan_progress_value">进度：%1$d/%2$d</string>
     <string name="ignore_file_extension">忽略文件后缀</string>
     <string name="ignore_file_extension_desc">扫描时也检查非 APK/APKS/APKM/XAPK 后缀的文件，若文件头为 ZIP 格式则尝试读取其中的 base.apk</string>
 </resources>
