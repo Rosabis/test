@@ -32,9 +32,11 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Enumeration
+import java.util.zip.ZipInputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import kotlin.concurrent.thread
@@ -314,29 +316,165 @@ class MainActivity : AppCompatActivity() {
         return 0L
     }
 
+    private fun ZipFile.readEntryText(entry: ZipEntry, maxBytes: Int = 512 * 1024): String? {
+        return try {
+            getInputStream(entry).use { input ->
+                val bytes = input.readBytes()
+                if (bytes.size > maxBytes) return null
+                bytes.toString(Charsets.UTF_8)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun chooseApkEntryFromXapkManifest(zip: ZipFile, entries: List<ZipEntry>): ZipEntry? {
+        val manifestEntry = entries.firstOrNull { !it.isDirectory && it.name.equals("manifest.json", ignoreCase = true) }
+            ?: return null
+
+        val text = zip.readEntryText(manifestEntry) ?: return null
+        val json = try {
+            JSONObject(text)
+        } catch (_: Exception) {
+            return null
+        }
+
+        // Common XAPK schema:
+        // {
+        //   "package_name": "...",
+        //   "split_apks": [{ "id": "base", "file": "base.apk" }, ...]
+        // }
+        val splitApks = json.optJSONArray("split_apks") ?: return null
+
+        // Prefer id == "base", else any file == "base.apk"
+        var preferredFile: String? = null
+        for (i in 0 until splitApks.length()) {
+            val obj = splitApks.optJSONObject(i) ?: continue
+            val id = obj.optString("id")
+            val file = obj.optString("file")
+            if (id.equals("base", ignoreCase = true) && file.isNotBlank()) {
+                preferredFile = file
+                break
+            }
+        }
+        if (preferredFile.isNullOrBlank()) {
+            for (i in 0 until splitApks.length()) {
+                val obj = splitApks.optJSONObject(i) ?: continue
+                val file = obj.optString("file")
+                if (file.equals("base.apk", ignoreCase = true)) {
+                    preferredFile = file
+                    break
+                }
+            }
+        }
+        if (preferredFile.isNullOrBlank()) return null
+
+        val normalized = preferredFile.replace("\\", "/").trimStart('/')
+        return entries.firstOrNull { !it.isDirectory && it.name == normalized }
+            ?: entries.firstOrNull { !it.isDirectory && it.name.endsWith("/$normalized") }
+    }
+
+    private fun extractApkEntryToTemp(zip: ZipFile, entry: ZipEntry): File? {
+        return try {
+            val out = createTempFile(prefix = "inner_", suffix = ".apk").toFile()
+            zip.getInputStream(entry).use { input ->
+                FileOutputStream(out).use { output -> input.copyTo(output) }
+            }
+            out
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun apkLooksLikeConfigSplit(name: String): Boolean {
+        val n = name.lowercase()
+        return n.contains("split_config") ||
+                n.contains("config.") ||
+                n.contains("config-") ||
+                n.contains("/config") ||
+                n.contains("density") ||
+                n.contains("lang") ||
+                n.contains("locale") ||
+                n.contains("xxhdpi") || n.contains("xhdpi") || n.contains("hdpi") || n.contains("mdpi") ||
+                n.contains("arm64") || n.contains("armeabi") || n.contains("x86")
+    }
+
+    private fun apkHasDex(file: File): Boolean {
+        return try {
+            ZipInputStream(file.inputStream().buffered()).use { zis ->
+                var entry: ZipEntry? = zis.nextEntry
+                while (entry != null) {
+                    val n = entry.name
+                    if (n == "classes.dex" || (n.startsWith("classes") && n.endsWith(".dex"))) return true
+                    entry = zis.nextEntry
+                }
+            }
+            false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun scoreApkCandidate(entry: ZipEntry): Int {
+        val fileName = entry.name.substringAfterLast('/')
+        val lower = fileName.lowercase()
+        var score = 0
+
+        if (fileName.equals("base.apk", ignoreCase = true)) score += 10_000
+        if (lower.contains("base")) score += 500
+        if (apkLooksLikeConfigSplit(entry.name)) score -= 800
+
+        // size still matters, but only as tie-breaker
+        score += (entry.effectiveSize() / (1024 * 1024)).toInt().coerceAtMost(200)
+        return score
+    }
+
     private fun extractOneApkFromArchive(context: Context, archiveUri: Uri): File? {
         val archive = copyUriToTempFile(context, archiveUri, ".zip") ?: return null
         try {
             ZipFile(archive).use { zip ->
                 val entries = zip.entries().asList()
 
-                // 1. First try to find base.apk
-                val targetEntry = entries.firstOrNull { entry ->
-                    !entry.isDirectory && entry.name.substringAfterLast('/').equals("base.apk", ignoreCase = true)
-                } ?: run {
-                    // 2. If no base.apk, find the largest .apk file
-                    val apkEntries = entries.filter { entry ->
-                        !entry.isDirectory && entry.name.lowercase().endsWith(".apk")
-                    }
-                    apkEntries.maxByOrNull { it.effectiveSize() }
+                val apkEntries = entries
+                    .filter { entry -> !entry.isDirectory && entry.name.lowercase().endsWith(".apk") }
+                    .sortedWith(
+                        compareByDescending<ZipEntry> { scoreApkCandidate(it) }
+                            .thenByDescending { it.effectiveSize() }
+                    )
+
+                // 1) If it's a typical XAPK, manifest.json can precisely tell us the base APK.
+                val manifestChosen = chooseApkEntryFromXapkManifest(zip, entries)
+                if (manifestChosen != null) {
+                    extractApkEntryToTemp(zip, manifestChosen)?.let { return it }
                 }
 
-                if (targetEntry != null) {
-                    val out = createTempFile(prefix = "inner_", suffix = ".apk").toFile()
-                    zip.getInputStream(targetEntry).use { input ->
-                        FileOutputStream(out).use { output -> input.copyTo(output) }
+                // 2) Fast path: exact base.apk (any folder).
+                val baseByName = entries.firstOrNull { entry ->
+                    !entry.isDirectory && entry.name.substringAfterLast('/').equals("base.apk", ignoreCase = true)
+                }
+                if (baseByName != null) {
+                    extractApkEntryToTemp(zip, baseByName)?.let { return it }
+                }
+
+                // 3) Robust fallback: try APKs (largest first) until one parses.
+                // This avoids accidentally picking an unreadable stub/config entry.
+                apkEntries.forEach { candidate ->
+                    val extracted = extractApkEntryToTemp(zip, candidate) ?: return@forEach
+                    try {
+                        // Most config/data splits have no dex; base almost always has dex.
+                        if (!apkHasDex(extracted)) {
+                            extracted.delete()
+                            return@forEach
+                        }
+
+                        val pkgInfo = getPackageInfoFromArchive(context.packageManager, extracted.path)
+                        if (pkgInfo?.applicationInfo != null && !pkgInfo.packageName.isNullOrBlank()) {
+                            return extracted
+                        }
+                    } catch (_: Exception) {
+                        // ignore and try next
                     }
-                    return out
+                    extracted.delete()
                 }
             }
         } catch (_: Exception) {
