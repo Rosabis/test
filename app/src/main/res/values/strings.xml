@@ -21,8 +21,8 @@
     <string name="save">保存</string>
     <string name="cancel">取消</string>
     <string name="category_general">常规设置</string>
-    <string name="category_customize">自定义</string>
-    <string name="category_filename">其他设置</string>
+    <string name="category_customize">其他设置</string>
+    <string name="category_filename">自定义文件名</string>
     <string name="category_app">主题设置</string>
     <string name="category_about">关于</string>
     <string name="theme_follow_system">跟随系统</string>
