@@ -132,20 +132,19 @@ class MainActivity : AppCompatActivity() {
             adapter = this@MainActivity.adapter
         }
 
-        findViewById<Button>(R.id.btnRename).setOnClickListener {
+        val btnRename = findViewById<Button>(R.id.btnRename)
+        val btnRollback = findViewById<Button>(R.id.btnRollback)
+
+        btnRename.setOnClickListener {
             if (!hasAnyFieldSelected()) {
                 toast(getString(R.string.error_no_fields))
                 return@setOnClickListener
             }
-            val renamedCount = renameFiles()
-            toast(getString(R.string.rename_done, renamedCount))
-            adapter.notifyDataSetChanged()
+            renameFilesAsync()
         }
 
-        findViewById<Button>(R.id.btnRollback).setOnClickListener {
-            val rollbackCount = rollbackNames()
-            toast(getString(R.string.rollback_done, rollbackCount))
-            adapter.notifyDataSetChanged()
+        btnRollback.setOnClickListener {
+            rollbackFilesAsync()
         }
     }
 
@@ -362,42 +361,109 @@ class MainActivity : AppCompatActivity() {
         return parts.joinToString(sep).sanitizeForFileName().ifBlank { "app" }
     }
 
-    private fun renameFiles(): Int {
-        var renamed = 0
+    private fun renameFilesAsync() {
+        if (isScanning) return
+        val selectedItems = items.filter { it.isSelected }
+        val total = selectedItems.size
+        if (total == 0) {
+            toast(getString(R.string.rename_done, 0))
+            return
+        }
+        isScanning = true
 
-        items.forEach { item ->
-            if (!item.isSelected) return@forEach
-            val oldName = item.file.name ?: return@forEach
-            val newName = item.plannedName
-            if (newName == oldName) return@forEach
-            val success = item.file.renameTo(newName)
-            if (success) {
-                renamed++
-                renameHistory.add(item.file to oldName)
-                item.currentName = newName
-                item.plannedName = newName
+        runOnUiThread {
+            tvScanProgress.visibility = TextView.VISIBLE
+            pbScan.visibility = ProgressBar.VISIBLE
+            pbScan.isIndeterminate = false
+            pbScan.max = total.coerceAtLeast(1)
+            pbScan.progress = 0
+            tvScanProgress.text = getString(R.string.scan_progress_value, 0, total)
+            findViewById<Button>(R.id.btnRename).isEnabled = false
+            findViewById<Button>(R.id.btnRollback).isEnabled = false
+        }
+
+        thread(start = true) {
+            var renamed = 0
+            selectedItems.forEachIndexed { index, item ->
+                val oldName = item.file.name ?: return@forEachIndexed
+                val newName = item.plannedName
+                if (newName != oldName) {
+                    val success = item.file.renameTo(newName)
+                    if (success) {
+                        renamed++
+                        renameHistory.add(item.file to oldName)
+                        item.currentName = newName
+                        item.plannedName = newName
+                    }
+                }
+                val progress = index + 1
+                runOnUiThread {
+                    pbScan.progress = progress
+                    tvScanProgress.text = getString(R.string.scan_progress_value, progress, total)
+                }
+            }
+
+            runOnUiThread {
+                isScanning = false
+                refreshPlannedNames()
+                adapter.notifyDataSetChanged()
+                toast(getString(R.string.rename_done, renamed))
+                hideScanProgress()
+                findViewById<Button>(R.id.btnRename).isEnabled = true
+                findViewById<Button>(R.id.btnRollback).isEnabled = true
             }
         }
-        refreshPlannedNames()
-        return renamed
     }
 
-    private fun rollbackNames(): Int {
-        if (renameHistory.isEmpty()) return 0
-        var rolledBack = 0
-        for (i in renameHistory.size - 1 downTo 0) {
-            val (file, oldName) = renameHistory[i]
-            val success = file.renameTo(oldName)
-            if (success) {
-                rolledBack++
-                renameHistory.removeAt(i)
+    private fun rollbackFilesAsync() {
+        if (isScanning) return
+        if (renameHistory.isEmpty()) {
+            toast(getString(R.string.rollback_done, 0))
+            return
+        }
+        isScanning = true
+        val historyCopy = renameHistory.reversed().toMutableList()
+        val total = historyCopy.size
+
+        runOnUiThread {
+            tvScanProgress.visibility = TextView.VISIBLE
+            pbScan.visibility = ProgressBar.VISIBLE
+            pbScan.isIndeterminate = false
+            pbScan.max = total.coerceAtLeast(1)
+            pbScan.progress = 0
+            tvScanProgress.text = getString(R.string.scan_progress_value, 0, total)
+            findViewById<Button>(R.id.btnRename).isEnabled = false
+            findViewById<Button>(R.id.btnRollback).isEnabled = false
+        }
+
+        thread(start = true) {
+            var rolledBack = 0
+            historyCopy.forEachIndexed { index, (file, oldName) ->
+                val success = file.renameTo(oldName)
+                if (success) {
+                    rolledBack++
+                    renameHistory.remove(file to oldName)
+                }
+                val progress = index + 1
+                runOnUiThread {
+                    pbScan.progress = progress
+                    tvScanProgress.text = getString(R.string.scan_progress_value, progress, total)
+                }
+            }
+
+            runOnUiThread {
+                isScanning = false
+                items.forEach { item ->
+                    item.currentName = item.file.name.orEmpty()
+                }
+                refreshPlannedNames()
+                adapter.notifyDataSetChanged()
+                toast(getString(R.string.rollback_done, rolledBack))
+                hideScanProgress()
+                findViewById<Button>(R.id.btnRename).isEnabled = true
+                findViewById<Button>(R.id.btnRollback).isEnabled = true
             }
         }
-        items.forEach { item ->
-            item.currentName = item.file.name.orEmpty()
-        }
-        refreshPlannedNames()
-        return rolledBack
     }
 
     private fun makeUnique(base: String, used: MutableSet<String>): String {
