@@ -1,5 +1,17 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Edge Stable Dev Unlock</string>
-    <string name="xposed_desc">Hook 扩展开关（EdgeAndroidExtensionsAPI）并在 Edge 设置页顶栏菜单增加「Install extension (CRX)」，同进程打开 ExtensionInstallByCrxActivity。作用域：com.microsoft.emmx。</string>
+    <string name="app_name">APK Rename Tool</string>
+    <string name="pick_directory">选择目录</string>
+    <string name="no_directory_selected">未选择目录</string>
+    <string name="include_sub_dirs">读取子目录</string>
+    <string name="scan_files">扫描文件</string>
+    <string name="name_fields_title">文件名组成（最多四项）</string>
+    <string name="field_app_name">应用名</string>
+    <string name="field_package_name">包名</string>
+    <string name="field_version_name">版本名</string>
+    <string name="field_version_code">版本号</string>
+    <string name="rename_all">按规则重命名</string>
+    <string name="rename_done">重命名完成：%1$d 个</string>
+    <string name="scan_done">扫描完成：%1$d 个</string>
+    <string name="error_no_fields">请至少选择一个命名字段</string>
+    <string name="error_no_dir">请先选择目录</string>
 </resources>

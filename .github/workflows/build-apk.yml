@@ -1,18 +1,15 @@
-name: Build APK
+name: Build Android APK
 
 on:
-  push:
-    branches: [main, master]
-  pull_request:
   workflow_dispatch:
-
-concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  push:
+    branches: ["**"]
+  pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,46 +18,19 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install compile SDK 35 & build-tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          # 预置许可证，避免 yes|sdkmanager 在 pipefail 下因 SIGPIPE 退出 141
-          mkdir -p "${ANDROID_SDK_ROOT}/licenses"
-          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "${ANDROID_SDK_ROOT}/licenses/android-sdk-license"
-          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > "${ANDROID_SDK_ROOT}/licenses/android-sdk-preview-license"
-          CMD="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-          if [[ ! -x "$CMD" ]]; then
-            CMD="${ANDROID_SDK_ROOT}/cmdline-tools/bin/sdkmanager"
-          fi
-          "$CMD" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Bootstrap Gradle Wrapper
-        shell: bash
-        run: |
-          set -euo pipefail
-          GRADLE_VER=8.11.1
-          curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VER}-bin.zip" -o "/tmp/gradle.zip"
-          unzip -q "/tmp/gradle.zip" -d "/tmp"
-          export PATH="/tmp/gradle-${GRADLE_VER}/bin:$PATH"
-          cd "${GITHUB_WORKSPACE}"
-          gradle wrapper --gradle-version "${GRADLE_VER}"
-          chmod +x gradlew
-
-      - name: Gradle build cache
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
 
-      - name: Assemble debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Build debug APK
+        run: gradle :app:assembleDebug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: edge-stable-dev-unlock-debug
+          name: apk-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
