@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet Packages
+        run: nuget restore ${{ github.workspace }}/KaiosMarketDownloader.sln
+
+      - name: Build
+        run: msbuild ${{ github.workspace }}/KaiosMarketDownloader.sln /p:Configuration=Release /p:Platform="AnyCPU" /t:Rebuild
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: KaiosMarketDownloader
+          path: |
+            ${{ github.workspace }}/KaiosMarketDownloader/bin/Release/*.exe
+            ${{ github.workspace }}/KaiosMarketDownloader/bin/Release/*.dll
+          retention-days: 30
