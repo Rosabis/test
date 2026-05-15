@@ -17,6 +17,9 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Install .NET Framework 4.0 Developer Pack
+        run: choco install netfx-4.0-devpack --yes
+
       - name: Restore NuGet Packages
         run: nuget restore ${{ github.workspace }}/KaiosMarketDownloader.sln
 
