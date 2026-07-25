@@ -6,18 +6,23 @@ from lanzou.api import LanZouCloud
 
 
 def main():
-    ylogin = os.getenv("LANZOU_YLOGIN")
-    phpdisk_info = os.getenv("LANZOU_PHPDISK_INFO")
+    cookie_string = os.getenv("LANZOU_COOKIE")
     target_folder_id = os.getenv("LANZOU_FOLDER_ID", "-1")
     
-    if not ylogin or not phpdisk_info:
-        print("Error: LANZOU_YLOGIN and LANZOU_PHPDISK_INFO environment variables are required")
+    if not cookie_string:
+        print("Error: LANZOU_COOKIE environment variable is required")
         sys.exit(1)
     
-    cookie = {
-        'ylogin': ylogin,
-        'phpdisk_info': phpdisk_info
-    }
+    cookie = {}
+    for item in cookie_string.split(';'):
+        item = item.strip()
+        if '=' in item:
+            key, value = item.split('=', 1)
+            cookie[key] = value
+    
+    if 'ylogin' not in cookie or 'phpdisk_info' not in cookie:
+        print("Error: Cookie must contain ylogin and phpdisk_info")
+        sys.exit(1)
     
     html_file = "bdime_ie.html"
     if not os.path.exists(html_file):

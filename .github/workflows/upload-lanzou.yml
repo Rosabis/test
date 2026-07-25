@@ -24,7 +24,6 @@ jobs:
 
       - name: Upload to Lanzou Cloud
         env:
-          LANZOU_YLOGIN: ${{ secrets.LANZOU_YLOGIN }}
-          LANZOU_PHPDISK_INFO: ${{ secrets.LANZOU_PHPDISK_INFO }}
+          LANZOU_COOKIE: ${{ secrets.LANZOU_COOKIE }}
           LANZOU_FOLDER_ID: ${{ secrets.LANZOU_FOLDER_ID }}
         run: python upload_lanzou.py
