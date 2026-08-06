@@ -1,0 +1,9 @@
+id=xhs_module
+name=Xhs Module
+version=1.0
+versionCode=1
+author=XhsModule
+description=小红书 Hook 模块 - 基于 Xposed API 102
+minApiVersion=100
+targetApiVersion=102
+staticScope=true

@@ -29,8 +29,6 @@ public class MainModule extends XposedModule {
 
     private HookManager hookManager;
     private ConfigParser configParser;
-    private boolean initialized = false;
-
     /**
      * Constructor called by the framework when module is loaded.
      */
@@ -53,7 +51,8 @@ public class MainModule extends XposedModule {
 
         hookManager.initialize(this, param);
 
-        logInfo("XhsModule initialized (API " + getApiVersion() + ")");
+        logInfo("XhsModule initialized (framework=" + XhsModule.getFrameworkName()
+                + ", versionCode=" + XhsModule.getFrameworkVersionCode() + ")");
     }
 
     /**
