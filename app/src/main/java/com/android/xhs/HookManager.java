@@ -73,7 +73,7 @@ public class HookManager {
      * Processes pending configurations when the classloader is available.
      */
     private void processPendingConfigs(XposedModuleInterface.PackageLoadedParam param) {
-        ClassLoader classLoader = param.getClassLoader();
+        ClassLoader classLoader = param.getDefaultClassLoader();
         List<HookConfig> installed = new ArrayList<>();
 
         for (HookConfig config : pendingConfigs) {
@@ -143,6 +143,16 @@ public class HookManager {
                 + "." + executable.getName() + " [id=" + key + "]");
 
         return handle;
+    }
+
+    /**
+     * Creates a HookBuilder for the given executable.
+     */
+    public XposedInterface.HookBuilder hook(Executable executable) {
+        if (xposedInterface == null) {
+            throw new IllegalStateException("XposedInterface not initialized");
+        }
+        return xposedInterface.hook(executable);
     }
 
     /**
@@ -248,7 +258,7 @@ public class HookManager {
      */
     public ClassLoader getCurrentClassLoader() {
         if (packageLoadedParam != null) {
-            return packageLoadedParam.getClassLoader();
+            return packageLoadedParam.getDefaultClassLoader();
         }
         return null;
     }

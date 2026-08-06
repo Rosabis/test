@@ -53,10 +53,7 @@ public class MainModule extends XposedModule {
 
         hookManager.initialize(this, param);
 
-        if (param.isFirstPackage()) {
-            initialized = true;
-            logInfo("XhsModule initialized (API " + getApiVersion() + ")");
-        }
+        logInfo("XhsModule initialized (API " + getApiVersion() + ")");
     }
 
     /**
@@ -129,7 +126,7 @@ public class MainModule extends XposedModule {
      * Installs hooks for a specific package using the ClassLoader from the param.
      */
     private void installHooksForPackage(XposedModuleInterface.PackageLoadedParam param) {
-        ClassLoader classLoader = param.getClassLoader();
+        ClassLoader classLoader = param.getDefaultClassLoader();
         List<HookConfig> configs = configParser.getConfigs();
 
         for (HookConfig config : configs) {
@@ -306,12 +303,5 @@ public class MainModule extends XposedModule {
      */
     public ConfigParser getConfigParser() {
         return configParser;
-    }
-
-    /**
-     * Returns the current API version.
-     */
-    public int getApiVersion() {
-        return getFrameworkVersion();
     }
 }

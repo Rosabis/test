@@ -81,7 +81,7 @@ public final class XhsModule {
     /**
      * Gets the framework version code.
      */
-    public static int getFrameworkVersionCode() {
+    public static long getFrameworkVersionCode() {
         if (moduleInstance != null) {
             return moduleInstance.getFrameworkVersionCode();
         }
